@@ -416,6 +416,29 @@ export async function processQuery(
       try {
         const pending = getPendingMessages();
 
+        const guardianResponses = pending.flatMap((message) => {
+          const response = parseGuardianOverrideResponse(message);
+          return response ? [{ message, response }] : [];
+        });
+        if (guardianResponses.length > 0) {
+          const responseIds = guardianResponses.map(({ message }) => message.id);
+          markProcessing(responseIds);
+          for (const { response } of guardianResponses) {
+            if (response.approved) {
+              if (!query.approveGuardianDeniedAction) {
+                throw new Error('The active provider does not support Guardian overrides');
+              }
+              await query.approveGuardianDeniedAction(response.assessment);
+              const retryPrompt =
+                '<system>An authorized human approved the previously Guardian-denied action. ' +
+                'Retry that exact action now; this authorization does not cover broader or different actions.</system>';
+              query.push(retryPrompt);
+              archivePrompts.push(retryPrompt);
+            }
+          }
+          markCompleted(responseIds);
+        }
+
         // Slash commands need a fresh query: /clear resets the SDK's
         // resume id (fixed at sdkQuery() time); admin/passthrough commands
         // (/compact, /cost, …) only dispatch when they're the first input
@@ -533,6 +556,21 @@ export async function processQuery(
         // effectively orphaned and the next message started a blank
         // Claude session with no prior context.
         setContinuation(providerName, event.continuation);
+      } else if (event.type === 'guardian-review') {
+        await writeMessageOut({
+          id: `guardian-${event.reviewId}`,
+          kind: 'system',
+          content: JSON.stringify({
+            action: 'guardian_review',
+            requestId: event.reviewId,
+            threadId: event.threadId,
+            status: event.status,
+            riskLevel: event.riskLevel ?? null,
+            rationale: event.rationale ?? null,
+            reviewedAction: event.action,
+            assessment: event.assessment,
+          }),
+        });
       } else if (event.type === 'text') {
         // Assistant text emitted mid-turn (e.g. between tool calls). The
         // final result only carries the LAST assistant text, so complete
@@ -687,6 +725,28 @@ function handleEvent(event: ProviderEvent, _routing: RoutingContext): void {
     case 'progress':
       log(`Progress: ${event.message}`);
       break;
+    case 'guardian-review':
+      log(`Guardian review ${event.reviewId}: ${event.status}${event.riskLevel ? ` (${event.riskLevel})` : ''}`);
+      break;
+  }
+}
+
+interface GuardianOverrideResponse {
+  approved: boolean;
+  assessment: Record<string, unknown>;
+}
+
+function parseGuardianOverrideResponse(message: MessageInRow): GuardianOverrideResponse | null {
+  if (message.kind !== 'system') return null;
+  try {
+    const content = JSON.parse(message.content) as Record<string, unknown>;
+    if (content.type !== 'guardian_override_response' || typeof content.approved !== 'boolean') return null;
+    if (typeof content.assessment !== 'object' || content.assessment === null || Array.isArray(content.assessment)) {
+      return null;
+    }
+    return { approved: content.approved, assessment: content.assessment as Record<string, unknown> };
+  } catch {
+    return null;
   }
 }
 

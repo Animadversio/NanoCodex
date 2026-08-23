@@ -65,7 +65,7 @@ describe('initGroupFilesystem agent surfaces', () => {
     const ag = group('ag-default', 'default-group');
     await createAgentGroup(ag);
 
-    await initGroupFilesystem(ag, { instructions: 'hello' });
+    await initGroupFilesystem(ag, { instructions: 'hello', provider: 'claude' });
 
     const groupDir = path.join(GROUPS_DIR, ag.folder);
     const claudeDir = path.join(DATA_DIR, 'v2-sessions', ag.id, '.claude-shared');
@@ -83,7 +83,7 @@ describe('initGroupFilesystem agent surfaces', () => {
   it('disables native Claude memory in existing settings without clobbering other values', async () => {
     const ag = group('ag-existing-claude', 'existing-claude-group');
     await createAgentGroup(ag);
-    await initGroupFilesystem(ag);
+    await initGroupFilesystem(ag, { provider: 'claude' });
 
     const settingsFile = path.join(DATA_DIR, 'v2-sessions', ag.id, '.claude-shared', 'settings.json');
     const settings = JSON.parse(fs.readFileSync(settingsFile, 'utf-8'));
@@ -96,7 +96,7 @@ describe('initGroupFilesystem agent surfaces', () => {
     ];
     fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2) + '\n');
 
-    await initGroupFilesystem(ag);
+    await initGroupFilesystem(ag, { provider: 'claude' });
 
     const reconciled = JSON.parse(fs.readFileSync(settingsFile, 'utf-8'));
     expect(reconciled.autoMemoryEnabled).toBe(false);
@@ -114,12 +114,12 @@ describe('initGroupFilesystem agent surfaces', () => {
   ])('warns and leaves existing settings unchanged for %s', async (_label, content) => {
     const ag = group('ag-invalid-claude', 'invalid-claude-group');
     await createAgentGroup(ag);
-    await initGroupFilesystem(ag);
+    await initGroupFilesystem(ag, { provider: 'claude' });
 
     const settingsFile = path.join(DATA_DIR, 'v2-sessions', ag.id, '.claude-shared', 'settings.json');
     fs.writeFileSync(settingsFile, content);
 
-    await initGroupFilesystem(ag);
+    await initGroupFilesystem(ag, { provider: 'claude' });
 
     expect(fs.readFileSync(settingsFile, 'utf-8')).toBe(content);
     expect(log.warn).toHaveBeenCalledWith(

@@ -20,6 +20,7 @@ import '../mailbox/compose.js';
 // registerApprovalHandler / requestApproval symbols are bound when self-mod
 // registers its handlers at import time.
 import './approvals/index.js';
+import './guardian/index.js';
 import './interactive/index.js';
 import './permissions/index.js';
 import './agent-to-agent/index.js';

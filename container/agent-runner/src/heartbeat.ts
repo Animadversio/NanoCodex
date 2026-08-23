@@ -1,6 +1,6 @@
 import fs from 'fs';
 
-const HEARTBEAT_PATH = '/workspace/.heartbeat';
+import { HEARTBEAT_PATH } from './paths.js';
 
 export function touchHeartbeat(): void {
   const now = new Date();

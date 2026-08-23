@@ -1,10 +1,10 @@
 /**
- * Init the first (or Nth) NanoClaw v2 agent for a DM channel.
+ * Init the first (or Nth) NanoCodex agent for a DM channel.
  *
  * Wires a real DM channel (discord, telegram, etc.) to a new agent group,
  * then hands a welcome message to the running service via the CLI socket
  * (admin transport). The service routes that message into the DM session,
- * which wakes the container synchronously — the agent processes the welcome
+ * which wakes the native runner synchronously — the agent processes the welcome
  * and DMs the operator through the normal delivery path.
  *
  * CLI channel wiring is handled separately by `scripts/init-cli-agent.ts`.
@@ -304,7 +304,7 @@ async function main(): Promise<void> {
     stageGroupPersona(
       path.resolve(GROUPS_DIR, folder),
       `# ${args.agentName}\n\n` +
-        `You are ${args.agentName}, a personal NanoClaw agent for ${args.displayName}. ` +
+        `You are ${args.agentName}, a personal NanoCodex agent for ${args.displayName}. ` +
         'When the user first reaches out (or you receive a system welcome prompt), introduce yourself briefly and invite them to chat. Keep replies concise.',
     );
   }

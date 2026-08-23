@@ -10,7 +10,7 @@ describe('memory scaffold boot wiring', () => {
   const indexSrc = fs.readFileSync(path.join(import.meta.dir, '..', 'index.ts'), 'utf-8');
 
   it('scaffolds memory unconditionally in main()', () => {
-    expect(indexSrc).toMatch(/\n\s*ensureMemoryScaffold\(\);/);
+    expect(indexSrc).toMatch(/\n\s*ensureMemoryScaffold\(AGENT_DIR\);/);
     expect(indexSrc).not.toContain('usesMemoryScaffold');
   });
 

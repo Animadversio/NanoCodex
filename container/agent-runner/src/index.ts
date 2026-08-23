@@ -28,6 +28,7 @@ import { buildSystemPromptAddendum } from './destinations.js';
 import { getTaskSeriesId } from './db/session-routing.js';
 import { ensureMemoryScaffold } from './memory/scaffold.js';
 import { MEMORY_SESSION_HOOK } from './memory/session-hook.js';
+import { builtinMcpEnv } from './mcp-env.js';
 // Module barrel — loads registration modules, including the singular mailbox slot.
 import './modules/index.js';
 import { getAgentMailbox, readMailboxContext } from './mailbox/index.js';
@@ -35,6 +36,7 @@ import { getAgentMailbox, readMailboxContext } from './mailbox/index.js';
 // Provider skills append imports to providers/index.ts.
 import './providers/index.js';
 import { createProvider, type ProviderName } from './providers/factory.js';
+import { additionalDirectoriesFromEnv, AGENT_DIR } from './paths.js';
 import { resolvePluginServer } from './plugin-mcp.js';
 import type { McpServerConfig } from './providers/types.js';
 import { runPollLoop } from './poll-loop.js';
@@ -42,8 +44,6 @@ import { runPollLoop } from './poll-loop.js';
 function log(msg: string): void {
   console.error(`[agent-runner] ${msg}`);
 }
-
-const CWD = '/workspace/agent';
 
 async function main(): Promise<void> {
   const config = loadConfig();
@@ -55,7 +55,7 @@ async function main(): Promise<void> {
 
   // Every provider shares one persistent memory tree. Legacy imports are an
   // operator-run migration and never happen in this normal startup path.
-  ensureMemoryScaffold();
+  ensureMemoryScaffold(AGENT_DIR);
 
   // Runtime-generated system-prompt addendum: agent identity (name) plus
   // the live destinations map. Everything else (capabilities, per-module
@@ -70,13 +70,13 @@ async function main(): Promise<void> {
   );
 
   // Discover additional directories mounted at /workspace/extra/*
-  const additionalDirectories: string[] = [];
+  const additionalDirectories: string[] = additionalDirectoriesFromEnv();
   const extraBase = '/workspace/extra';
   if (fs.existsSync(extraBase)) {
     for (const entry of fs.readdirSync(extraBase)) {
       const fullPath = path.join(extraBase, entry);
       if (fs.statSync(fullPath).isDirectory()) {
-        additionalDirectories.push(fullPath);
+        if (!additionalDirectories.includes(fullPath)) additionalDirectories.push(fullPath);
       }
     }
     if (additionalDirectories.length > 0) {
@@ -93,7 +93,7 @@ async function main(): Promise<void> {
     nanoclaw: {
       command: 'bun',
       args: ['run', mcpServerPath],
-      env: {},
+      env: builtinMcpEnv(),
     },
   };
 
@@ -122,7 +122,7 @@ async function main(): Promise<void> {
     await runPollLoop({
       provider,
       providerName,
-      cwd: CWD,
+      cwd: AGENT_DIR,
       systemContext: { instructions },
     });
   } finally {

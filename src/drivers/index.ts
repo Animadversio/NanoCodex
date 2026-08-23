@@ -2,12 +2,11 @@
  * Driver selection.
  *
  * `NANOCLAW_RUNTIME_DRIVER` is read once, at first use, and defaults to
- * `docker` — so an install that never sets it behaves exactly as it did before
- * the seam existed. Nothing above this module may branch on the driver's
+ * `native` for NanoCodex. Nothing above this module may branch on the driver's
  * identity: features gate on `capabilities()`, never on `kind`.
  *
  * Selection is a registry, not a switch. Drivers self-register by kind; this
- * module pre-registers `docker`, the only realization that ships here. An
+ * module pre-registers the realizations that ship here. An
  * overlay adds its own with one `registerSessionDriver(...)` call and one
  * appended import — the same shape as the provider container-config barrel
  * (`src/providers/index.ts`) and the session-egress factory. Nothing outside
@@ -58,7 +57,7 @@ import './installed.js';
 import { withSessionEvents, type SessionEventsDriver } from './session-events.js';
 import type { MountPolicy, SessionDriver, SessionSpec } from './types.js';
 
-const DEFAULT_DRIVER_KIND = 'docker';
+const DEFAULT_DRIVER_KIND = 'native';
 
 const SETTINGS = ['NANOCLAW_RUNTIME_DRIVER', 'NANOCLAW_SESSION_MATERIAL_ROOT'] as const;
 
@@ -83,10 +82,7 @@ function dockerNetworkArgs(spec: SessionSpec): string[] {
   return os.platform() === 'linux' ? ['--add-host=host.docker.internal:host-gateway'] : [];
 }
 
-registerSessionDriver(
-  DEFAULT_DRIVER_KIND,
-  (policy) => new DockerSessionDriver({ ...policy, networkArgsFor: dockerNetworkArgs }),
-);
+registerSessionDriver('docker', (policy) => new DockerSessionDriver({ ...policy, networkArgsFor: dockerNetworkArgs }));
 
 export function configuredDriverKind(env: NodeJS.ProcessEnv = process.env): DriverKind {
   return readSetting('NANOCLAW_RUNTIME_DRIVER', env).toLowerCase() || DEFAULT_DRIVER_KIND;

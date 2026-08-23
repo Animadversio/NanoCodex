@@ -19,6 +19,7 @@ import {
   CONTAINER_MEMORY_LIMIT,
   CONTAINER_PIDS_LIMIT,
   DATA_DIR,
+  DEFAULT_AGENT_PROVIDER,
   GROUPS_DIR,
   INSTALL_SLUG,
   TIMEZONE,
@@ -426,13 +427,13 @@ export async function adoptRunningSessions(): Promise<{ adopted: number; stopped
 /**
  * Resolve the provider name for a session:
  *
- *   sessions.agent_provider → container_configs.provider → 'claude'
+ *   sessions.agent_provider → container_configs.provider → DEFAULT_AGENT_PROVIDER
  */
 export function resolveProviderName(
   sessionProvider: string | null | undefined,
   containerConfigProvider: string | null | undefined,
 ): string {
-  return (sessionProvider || containerConfigProvider || 'claude').toLowerCase();
+  return (sessionProvider || containerConfigProvider || DEFAULT_AGENT_PROVIDER).toLowerCase();
 }
 
 async function resolveProviderContribution(
@@ -749,7 +750,7 @@ export function composeSessionSpec(input: ComposeSessionSpecInput): SessionSpec 
     },
     // The group's configured tier; the driver refuses one it cannot realize
     // (validateSpec, against capabilities().isolationTiers).
-    runtimeTier: containerConfig.runtimeTier ?? 'container',
+    runtimeTier: containerConfig.runtimeTier ?? 'native',
     runAs,
     stopGraceSeconds: STOP_GRACE_SECONDS,
   };

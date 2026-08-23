@@ -442,6 +442,70 @@ it('does not push accumulated-only follow-ups into an active query', async () =>
   expect(getPendingMessages().map((m) => m.id)).toEqual(['m1']);
 });
 
+it('persists a Guardian review and feeds an authorized override back to the active provider', async () => {
+  const pushes: string[] = [];
+  const approvals: Record<string, unknown>[] = [];
+  const assessment = {
+    id: 'review-1',
+    turn_id: 'turn-1',
+    started_at_ms: 1,
+    completed_at_ms: 2,
+    status: 'denied',
+    action: { type: 'command', source: 'shell', command: 'rm file', cwd: '/tmp' },
+  };
+
+  async function* events(): AsyncGenerator<ProviderEvent> {
+    yield {
+      type: 'guardian-review',
+      threadId: 'thread-1',
+      reviewId: 'review-1',
+      status: 'denied',
+      riskLevel: 'high',
+      rationale: 'destructive',
+      action: { type: 'command', command: 'rm file' },
+      assessment,
+    };
+    setTimeout(() => {
+      insertMessage('guardian-response-1', 'system', {
+        type: 'guardian_override_response',
+        approved: true,
+        assessment,
+      });
+    }, 50);
+    await new Promise((resolve) => setTimeout(resolve, 700));
+  }
+
+  await processQuery(
+    {
+      push: (message) => pushes.push(message),
+      end: () => {},
+      events: events(),
+      abort: () => {},
+      approveGuardianDeniedAction: async (event) => {
+        approvals.push(event);
+      },
+    },
+    ERR_ROUTING,
+    [],
+    'codex',
+    undefined,
+    'prompt',
+    undefined,
+  );
+
+  expect(approvals).toEqual([assessment]);
+  expect(pushes).toHaveLength(1);
+  expect(pushes[0]).toContain('authorized human approved');
+  const reviewRecord = getUndeliveredMessages().find((message) => message.kind === 'system');
+  expect(JSON.parse(reviewRecord!.content)).toMatchObject({
+    action: 'guardian_review',
+    requestId: 'review-1',
+    status: 'denied',
+    assessment,
+  });
+  expect(getPendingMessages().some((message) => message.id === 'guardian-response-1')).toBe(false);
+});
+
 describe('error result with no <message> envelope', () => {
   it('delivers a budget/billing error to the triggering channel and does not nudge', async () => {
     const budgetText = 'Spending limit reached. Add your own key at https://example.com/keys';

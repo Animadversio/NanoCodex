@@ -250,8 +250,8 @@ export interface ContainerConfig {
   model?: string;
   effort?: string;
   timezone?: string;
-  /** Session isolation tier for the group's containers; absent = the composer's default ('container'). */
-  runtimeTier?: 'container' | 'vm';
+  /** Session execution tier; absent = the NanoCodex native runtime. */
+  runtimeTier?: 'native' | 'container' | 'vm';
 }
 
 /**
@@ -321,10 +321,15 @@ export function sanitizeStoredMcpServers(raw: unknown, groupName: string): Recor
  * realize is refused separately by validateSpec, against the driver's
  * capabilities.)
  */
-function parseRuntimeTier(raw: string | null | undefined, groupName: string): 'container' | 'vm' | undefined {
+function parseRuntimeTier(
+  raw: string | null | undefined,
+  groupName: string,
+): 'native' | 'container' | 'vm' | undefined {
   if (raw == null) return undefined;
-  if (raw === 'container' || raw === 'vm') return raw;
-  throw new Error(`agent group "${groupName}" has invalid runtime_tier "${raw}" — expected "container" or "vm"`);
+  if (raw === 'native' || raw === 'container' || raw === 'vm') return raw;
+  throw new Error(
+    `agent group "${groupName}" has invalid runtime_tier "${raw}" — expected "native", "container", or "vm"`,
+  );
 }
 
 /** Build a `ContainerConfig` from a DB row + agent group identity. */

@@ -27,7 +27,7 @@ export interface ContainerConfigRow {
   cli_scope: string; // 'disabled' | 'group' | 'global'
   timezone: string | null; // IANA id; NULL = follow the install-global timezone
   /**
-   * Session isolation tier ('container' | 'vm') — see SessionSpec.runtimeTier.
+   * Session execution tier ('native' | 'container' | 'vm') — see SessionSpec.runtimeTier.
    * Optional on the TS type because the trunk schema does not carry the
    * column: a deployment whose driver realizes more than one tier adds it,
    * and `SELECT *` rows surface it here. Absent means the default tier.

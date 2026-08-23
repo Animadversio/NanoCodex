@@ -2,7 +2,8 @@
  * Gateway provider selection.
  *
  * `NANOCLAW_GATEWAY_PROVIDER` is read once, at first use, and defaults to
- * `onecli` — an install that never sets it behaves exactly as it always has.
+ * `direct` for NanoCodex: native Codex owns authentication and Guardian owns
+ * action review. The inherited `onecli` gateway remains opt-in.
  * One active provider per install; a configured kind with no registered
  * provider throws the same operator-error shape as an unknown runtime driver,
  * for the same reason: a host configured for one gateway must not silently
@@ -23,7 +24,7 @@ import {
 // Side-effect import: the barrel overlays append their registration to.
 import './installed.js';
 
-const DEFAULT_GATEWAY_PROVIDER_KIND = 'onecli';
+const DEFAULT_GATEWAY_PROVIDER_KIND = 'direct';
 
 export function configuredGatewayProviderKind(env: NodeJS.ProcessEnv = process.env): GatewayProviderKind {
   const configured =

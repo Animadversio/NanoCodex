@@ -79,8 +79,8 @@ afterEach(() => {
 });
 
 describe('configuredDriverKind', () => {
-  it('defaults to docker when nothing is set anywhere', () => {
-    expect(configuredDriverKind({})).toBe('docker');
+  it('defaults to native when nothing is set anywhere', () => {
+    expect(configuredDriverKind({})).toBe('native');
   });
 
   it('reads the selection from .env, not only from the process environment', () => {
@@ -102,8 +102,10 @@ describe('configuredDriverKind', () => {
 });
 
 describe('createSessionDriver', () => {
-  it('builds the docker driver by default, and it is pre-registered', () => {
+  it('pre-registers the native and docker drivers', () => {
+    expect(listSessionDriverKinds()).toContain('native');
     expect(listSessionDriverKinds()).toContain('docker');
+    expect(createSessionDriver('native').kind).toBe('native');
     expect(createSessionDriver('docker').kind).toBe('docker');
   });
 
@@ -185,7 +187,7 @@ describe('getSessionDriver', () => {
     resetSessionDriver(standIn);
     expect(getSessionDriver()).toBe(standIn);
     resetSessionDriver(null);
-    expect(getSessionDriver().kind).toBe('docker');
+    expect(getSessionDriver().kind).toBe('native');
   });
 });
 

@@ -19,8 +19,7 @@
  */
 import { Database } from 'bun:sqlite';
 
-const DEFAULT_INBOUND_PATH = '/workspace/inbound.db';
-const DEFAULT_OUTBOUND_PATH = '/workspace/outbound.db';
+import { INBOUND_DB_PATH, OUTBOUND_DB_PATH } from '../../paths.js';
 
 let _inbound: Database | null = null;
 let _outbound: Database | null = null;
@@ -51,7 +50,7 @@ export function openInboundDb(): Database {
       close: () => {},
     } as unknown as Database;
   }
-  const db = new Database(DEFAULT_INBOUND_PATH, { readonly: true });
+  const db = new Database(INBOUND_DB_PATH, { readonly: true });
   db.exec('PRAGMA busy_timeout = 5000');
   db.exec('PRAGMA mmap_size = 0');
   return db;
@@ -65,7 +64,7 @@ export function openInboundDb(): Database {
  */
 export function getInboundDb(): Database {
   if (!_inbound) {
-    _inbound = new Database(DEFAULT_INBOUND_PATH, { readonly: true });
+    _inbound = new Database(INBOUND_DB_PATH, { readonly: true });
     _inbound.exec('PRAGMA busy_timeout = 5000');
     _inbound.exec('PRAGMA mmap_size = 0');
   }
@@ -75,7 +74,7 @@ export function getInboundDb(): Database {
 /** Outbound DB — container owns this file (sole writer). */
 export function getOutboundDb(): Database {
   if (!_outbound) {
-    _outbound = new Database(DEFAULT_OUTBOUND_PATH);
+    _outbound = new Database(OUTBOUND_DB_PATH);
     _outbound.exec('PRAGMA journal_mode = DELETE');
     _outbound.exec('PRAGMA busy_timeout = 5000');
     _outbound.exec('PRAGMA foreign_keys = ON');

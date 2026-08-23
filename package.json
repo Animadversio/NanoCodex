@@ -1,7 +1,7 @@
 {
-  "name": "nanoclaw",
+  "name": "nanocodex",
   "version": "2.2.0",
-  "description": "Personal AI assistant. Lightweight, secure, customizable.",
+  "description": "Multi-user Discord interface for native Codex agent sessions with Guardian approvals.",
   "type": "module",
   "packageManager": "pnpm@10.34.5",
   "main": "dist/index.js",
@@ -23,6 +23,7 @@
     "prepare": "husky",
     "setup": "tsx setup/index.ts",
     "setup:auto": "tsx setup/auto.ts",
+    "native:doctor": "node --import tsx scripts/native-doctor.ts",
     "ncl": "tsx src/cli/client.ts",
     "migrate": "tsx scripts/migrate.ts",
     "chat": "tsx scripts/chat.ts",
@@ -34,6 +35,7 @@
   "dependencies": {
     "@clack/core": "^1.2.0",
     "@clack/prompts": "^1.2.0",
+    "@chat-adapter/discord": "4.29.0",
     "@onecli-sh/sdk": "2.2.1",
     "better-sqlite3": "13.0.3",
     "chat": "4.29.0",

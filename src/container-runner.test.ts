@@ -41,8 +41,8 @@ describe('resolveProviderName', () => {
     expect(resolveProviderName(null, 'opencode')).toBe('opencode');
   });
 
-  it('defaults to claude when nothing is set', () => {
-    expect(resolveProviderName(null, undefined)).toBe('claude');
+  it('defaults to Codex when nothing is set', () => {
+    expect(resolveProviderName(null, undefined)).toBe('codex');
   });
 
   it('lowercases the resolved name', () => {
@@ -52,7 +52,7 @@ describe('resolveProviderName', () => {
 
   it('treats empty string as unset (falls through)', () => {
     expect(resolveProviderName('', 'opencode')).toBe('opencode');
-    expect(resolveProviderName(null, '')).toBe('claude');
+    expect(resolveProviderName(null, '')).toBe('codex');
   });
 });
 
@@ -259,12 +259,12 @@ describe('composeSessionSpec', () => {
     const spec = compose();
     expect(spec.network).toBe('shared-private');
     expect(spec.hardening).toBe('standard');
-    expect(spec.runtimeTier).toBe('container');
+    expect(spec.runtimeTier).toBe('native');
     expect(spec.stopGraceSeconds).toBe(1);
   });
 
-  it('reads the isolation tier from the group container config, defaulting to container', () => {
-    expect(compose().runtimeTier).toBe('container');
+  it('reads the isolation tier from the group container config, defaulting to native', () => {
+    expect(compose().runtimeTier).toBe('native');
     expect(compose({ containerConfig: { ...containerConfig, runtimeTier: 'vm' } }).runtimeTier).toBe('vm');
     expect(compose({ containerConfig: { ...containerConfig, runtimeTier: 'container' } }).runtimeTier).toBe(
       'container',

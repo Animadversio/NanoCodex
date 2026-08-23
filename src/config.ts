@@ -28,15 +28,16 @@ const envConfig = readEnvFile([
  */
 export const ASSISTANT_NAME = process.env.ASSISTANT_NAME || envConfig.ASSISTANT_NAME || 'Andy';
 
-// Instance-wide default agent provider for newly created groups. `claude` (the
-// built-in provider) when unset, so existing installs are unaffected on upgrade.
+// Instance-wide default agent provider for newly created groups. NanoCodex
+// defaults to Codex; an inherited NanoClaw deployment can still set this to a
+// different registered provider explicitly.
 // Applied only at group-creation time (stamped onto the config row) — never in
 // provider resolution — so existing groups are never retroactively flipped.
 // Per-group `ncl groups config update --provider` still overrides it.
 export const DEFAULT_AGENT_PROVIDER = (
   process.env.DEFAULT_AGENT_PROVIDER ||
   envConfig.DEFAULT_AGENT_PROVIDER ||
-  'claude'
+  'codex'
 ).toLowerCase();
 
 /**

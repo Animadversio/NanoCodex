@@ -7,9 +7,8 @@
  */
 import fs from 'fs';
 
+import { CONFIG_PATH } from './paths.js';
 import type { McpServerConfig } from './providers/types.js';
-
-const CONFIG_PATH = '/workspace/agent/container.json';
 
 export interface RunnerConfig {
   provider: string;
@@ -41,7 +40,7 @@ export function loadConfig(): RunnerConfig {
   }
 
   _config = {
-    provider: (raw.provider as string) || 'claude',
+    provider: (raw.provider as string) || 'codex',
     assistantName: (raw.assistantName as string) || '',
     groupName: (raw.groupName as string) || '',
     agentGroupId: (raw.agentGroupId as string) || '',

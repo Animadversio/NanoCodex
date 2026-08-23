@@ -152,6 +152,9 @@ export interface AgentQuery {
 
   /** Force-stop the query. */
   abort(): void;
+
+  /** Apply an authorized human override to a Guardian-denied action. */
+  approveGuardianDeniedAction?(event: Record<string, unknown>): Promise<void>;
 }
 
 export type ProviderEvent =
@@ -177,6 +180,16 @@ export type ProviderEvent =
   | { type: 'text'; text: string }
   | { type: 'error'; message: string; retryable: boolean; classification?: string }
   | { type: 'progress'; message: string }
+  | {
+      type: 'guardian-review';
+      threadId: string;
+      reviewId: string;
+      status: 'approved' | 'denied' | 'timedOut' | 'aborted';
+      riskLevel?: string | null;
+      rationale?: string | null;
+      action: Record<string, unknown>;
+      assessment: Record<string, unknown>;
+    }
   | { type: 'file'; path: string }
   /**
    * Liveness signal. Providers MUST yield this on every underlying SDK

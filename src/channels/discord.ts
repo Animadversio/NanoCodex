@@ -123,7 +123,13 @@ registerChannelAdapter('discord', {
       supportsThreads: true,
       defaults: DISCORD_DEFAULTS,
       slashCommands: {
-        commands: ['/nanocodex where', '/nanocodex tree'],
+        commands: [
+          '/nanocodex help',
+          '/nanocodex where',
+          '/nanocodex tree',
+          '/nanocodex lineage',
+          '/nanocodex history',
+        ],
         handle: handleNanoCodexDiscordCommand,
       },
       // Discord rejects messages over 2000 chars; without this the bridge

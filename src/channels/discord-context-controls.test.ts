@@ -17,7 +17,7 @@ import {
 } from '../db/index.js';
 import { addMember } from '../modules/permissions/db/agent-group-members.js';
 import { createUser } from '../modules/permissions/db/users.js';
-import { resolveSession } from '../session-manager.js';
+import { resolveSession, writeOutboundDirect, writeSessionMessage } from '../session-manager.js';
 import type { ChatSdkSlashCommandEvent } from './chat-sdk-bridge.js';
 import {
   handleNanoCodexDiscordCommand,
@@ -28,10 +28,10 @@ import {
 const TEST_DIR = '/tmp/nanocodex-discord-context-controls-test';
 const PLATFORM_ID = 'discord:guild:channel';
 
-function event(command: string, threadId = PLATFORM_ID, userId = 'user-id'): ChatSdkSlashCommandEvent {
+function event(command: string, threadId = PLATFORM_ID, userId = 'user-id', text = ''): ChatSdkSlashCommandEvent {
   return {
     command,
-    text: '',
+    text,
     instance: 'discord',
     platformId: PLATFORM_ID,
     threadId,
@@ -101,6 +101,45 @@ describe('NanoCodex Discord context controls', () => {
     expect(tree).toContain('● trunk');
     expect(tree).toContain('→ thread thread-1');
     expect(tree).toContain('Codex codex-trunk-thread');
+
+    const lineage = await handleNanoCodexDiscordCommand(event('/nanocodex lineage', threadId));
+    expect(lineage).toContain('└ trunk');
+    expect(lineage).toContain('→ branch');
+  });
+
+  it('shows bounded history for the runtime attached to the current context', async () => {
+    const { session } = await resolveSession('ag-1', 'mg-1', PLATFORM_ID, 'per-thread');
+    await writeSessionMessage('ag-1', session.id, {
+      id: 'in-1',
+      kind: 'chat-sdk',
+      timestamp: '2026-08-24T10:00:00.000Z',
+      platformId: PLATFORM_ID,
+      channelType: 'discord',
+      threadId: PLATFORM_ID,
+      content: JSON.stringify({ text: 'hello @everyone', sender: 'User' }),
+    });
+    await writeOutboundDirect('ag-1', session.id, {
+      id: 'out-1',
+      kind: 'chat',
+      platformId: PLATFORM_ID,
+      channelType: 'discord',
+      threadId: PLATFORM_ID,
+      content: JSON.stringify({ text: 'hello back' }),
+    });
+
+    const history = await handleNanoCodexDiscordCommand(event('/nanocodex history', PLATFORM_ID, 'user-id', '2'));
+    expect(history).toContain('latest 2');
+    expect(history).toContain('User: hello @\u200beveryone');
+    expect(history).toContain('NanoCodex: hello back');
+    await expect(
+      handleNanoCodexDiscordCommand(event('/nanocodex history', PLATFORM_ID, 'user-id', '21')),
+    ).resolves.toMatch(/whole number from 1 to 20/);
+  });
+
+  it('provides discoverable command help', async () => {
+    const help = await handleNanoCodexDiscordCommand(event('/nanocodex help'));
+    expect(help).toContain('/nanocodex history [limit]');
+    expect(help).toContain('Create a Discord thread manually');
   });
 
   it('does not expose context metadata to a non-member', async () => {

@@ -56,7 +56,24 @@ function generatePlist(nodePath: string, projectRoot: string, homeDir: string, t
 </plist>`;
 }
 
-function generateSystemdUnit(nodePath: string, projectRoot: string, homeDir: string, isSystem: boolean): string {
+function generateSystemdUnit(
+  nodePath: string,
+  projectRoot: string,
+  homeDir: string,
+  isSystem: boolean,
+  toolPaths: string[] = [],
+): string {
+  const servicePath = [
+    ...new Set([
+      path.dirname(nodePath),
+      ...toolPaths.map(path.dirname),
+      `${homeDir}/.bun/bin`,
+      `${homeDir}/.local/bin`,
+      '/usr/local/bin',
+      '/usr/bin',
+      '/bin',
+    ]),
+  ].join(':');
   return `[Unit]
 Description=NanoClaw Personal Assistant
 After=network.target
@@ -69,7 +86,7 @@ Restart=always
 RestartSec=5
 KillMode=process
 Environment=HOME=${homeDir}
-Environment=PATH=/usr/local/bin:/usr/bin:/bin:${homeDir}/.local/bin
+Environment=PATH=${servicePath}
 StandardOutput=append:${projectRoot}/logs/nanoclaw.log
 StandardError=append:${projectRoot}/logs/nanoclaw.error.log
 
@@ -145,6 +162,19 @@ describe('systemd unit generation', () => {
   it('sets correct ExecStart', () => {
     const unit = generateSystemdUnit('/usr/bin/node', '/srv/nanoclaw', '/home/user', false);
     expect(unit).toContain('ExecStart=/usr/bin/node /srv/nanoclaw/dist/index.js');
+  });
+
+  it('keeps separately installed Node, Bun, and Codex directories on PATH', () => {
+    const unit = generateSystemdUnit(
+      '/home/user/.nvm/versions/node/v22/bin/node',
+      '/srv/nanoclaw',
+      '/home/user',
+      false,
+      ['/home/user/.bun/bin/bun', '/home/user/.local/bin/codex'],
+    );
+    expect(unit).toContain(
+      'Environment=PATH=/home/user/.nvm/versions/node/v22/bin:/home/user/.bun/bin:/home/user/.local/bin:/usr/local/bin:/usr/bin:/bin',
+    );
   });
 });
 

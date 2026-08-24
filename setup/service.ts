@@ -30,6 +30,7 @@ export async function run(_args: string[]): Promise<void> {
   const platform = getPlatform();
   const nodePath = getNodePath();
   const homeDir = os.homedir();
+  const toolPaths = ['bun', 'codex'].map(getCommandPath).filter((value): value is string => value !== null);
 
   log.info('Setting up service', { platform, nodePath, projectRoot });
 
@@ -81,14 +82,9 @@ export async function run(_args: string[]): Promise<void> {
   }
 
   if (platform === 'macos') {
-    setupLaunchd(
-      projectRoot,
-      nodePath,
-      homeDir,
-      ['bun', 'codex'].map(getCommandPath).filter((value): value is string => value !== null),
-    );
+    setupLaunchd(projectRoot, nodePath, homeDir, toolPaths);
   } else if (platform === 'linux') {
-    setupLinux(projectRoot, nodePath, homeDir);
+    setupLinux(projectRoot, nodePath, homeDir, toolPaths);
   } else {
     emitStatus('SETUP_SERVICE', {
       SERVICE_TYPE: 'unknown',
@@ -249,11 +245,11 @@ function setupLaunchd(projectRoot: string, nodePath: string, homeDir: string, to
   });
 }
 
-function setupLinux(projectRoot: string, nodePath: string, homeDir: string): void {
+function setupLinux(projectRoot: string, nodePath: string, homeDir: string, toolPaths: string[]): void {
   const serviceManager = getServiceManager();
 
   if (serviceManager === 'systemd') {
-    setupSystemd(projectRoot, nodePath, homeDir);
+    setupSystemd(projectRoot, nodePath, homeDir, toolPaths);
   } else {
     // WSL without systemd or other Linux without systemd
     setupNohupFallback(projectRoot, nodePath, homeDir);
@@ -302,10 +298,21 @@ function checkDockerGroupStale(): boolean {
   }
 }
 
-function setupSystemd(projectRoot: string, nodePath: string, homeDir: string): void {
+function setupSystemd(projectRoot: string, nodePath: string, homeDir: string, toolPaths: string[]): void {
   const runningAsRoot = isRoot();
   const unitName = getSystemdUnit(projectRoot);
   const unitFileName = `${unitName}.service`;
+  const servicePath = [
+    ...new Set([
+      path.dirname(nodePath),
+      ...toolPaths.map(path.dirname),
+      `${homeDir}/.bun/bin`,
+      `${homeDir}/.local/bin`,
+      '/usr/local/bin',
+      '/usr/bin',
+      '/bin',
+    ]),
+  ].join(':');
 
   // Root uses system-level service, non-root uses user-level
   let unitPath: string;
@@ -342,7 +349,7 @@ Restart=always
 RestartSec=5
 KillMode=process
 Environment=HOME=${homeDir}
-Environment=PATH=/usr/local/bin:/usr/bin:/bin:${homeDir}/.local/bin
+Environment=PATH=${servicePath}
 StandardOutput=append:${projectRoot}/logs/nanoclaw.log
 StandardError=append:${projectRoot}/logs/nanoclaw.error.log
 

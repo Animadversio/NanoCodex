@@ -19,6 +19,8 @@ See [the architecture and context design](docs/nanocodex-architecture.md) for th
 
 ## Native quick start
 
+For a reproducible install on another personal machine—including the background service, owner bootstrap, updates, and moving existing context—see [Personal installation on another device](docs/personal-install.md).
+
 Requirements:
 
 - macOS or Linux

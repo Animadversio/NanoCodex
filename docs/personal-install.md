@@ -41,7 +41,11 @@ For a personal multi-device setup, name bots by host, such as `NanoCodex-MacBook
 
 ## 2. Clone and install NanoCodex
 
+The repository is private. Authenticate the new device with GitHub first, using either `gh auth login` plus `gh auth setup-git`, or an SSH key attached to your GitHub account.
+
 ```bash
+gh auth login
+gh auth setup-git
 git clone https://github.com/Animadversio/NanoCodex.git
 cd NanoCodex
 pnpm install

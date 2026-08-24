@@ -245,6 +245,22 @@ describe('CodexProvider active turns', () => {
         aggregatedOutput: '18 tests passed',
       },
     });
+    fake.notify('item/started', {
+      startedAtMs: 450,
+      item: {
+        id: 'image-1',
+        type: 'imageGeneration',
+        status: 'inProgress',
+      },
+    });
+    fake.notify('item/completed', {
+      completedAtMs: 750,
+      item: {
+        id: 'image-1',
+        type: 'imageGeneration',
+        status: 'completed',
+      },
+    });
     fake.notify('turn/diff/updated', {
       diff: 'diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n-old\n+new',
     });
@@ -274,6 +290,17 @@ describe('CodexProvider active turns', () => {
       durationMs: 300,
       exitCode: 0,
       output: '18 tests passed',
+      paths: undefined,
+    });
+    expect(updates).toContainEqual({
+      kind: 'item-completed',
+      id: 'image-1',
+      itemKind: 'tool',
+      label: 'image generation',
+      status: 'completed',
+      durationMs: undefined,
+      exitCode: undefined,
+      output: undefined,
       paths: undefined,
     });
     expect(updates).toContainEqual({

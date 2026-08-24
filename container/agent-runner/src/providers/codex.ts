@@ -146,6 +146,12 @@ function activityItem(item: CodexItem): {
         label: stringValue(item.query) ?? 'web search',
         status: 'completed',
       };
+    case 'imageGeneration':
+      return {
+        itemKind: 'tool',
+        label: 'image generation',
+        status: stringValue(item.status) ?? 'completed',
+      };
     default:
       return null;
   }

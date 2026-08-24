@@ -106,6 +106,15 @@ export function getNodePath(): string {
   }
 }
 
+export function getCommandPath(name: string): string | null {
+  if (!/^[A-Za-z0-9._-]+$/.test(name)) return null;
+  try {
+    return execSync(`command -v ${name}`, { encoding: 'utf-8' }).trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 export function commandExists(name: string): boolean {
   try {
     execSync(`command -v ${name}`, { stdio: 'ignore' });

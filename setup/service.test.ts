@@ -11,8 +11,19 @@ import { getLaunchdLabel } from '../src/install-slug.js';
  */
 
 // Helper: generate a plist string the same way service.ts does
-function generatePlist(nodePath: string, projectRoot: string, homeDir: string): string {
+function generatePlist(nodePath: string, projectRoot: string, homeDir: string, toolPaths: string[] = []): string {
   const label = getLaunchdLabel(projectRoot);
+  const servicePath = [
+    ...new Set([
+      path.dirname(nodePath),
+      ...toolPaths.map(path.dirname),
+      '/opt/homebrew/bin',
+      '/usr/local/bin',
+      '/usr/bin',
+      '/bin',
+      `${homeDir}/.local/bin`,
+    ]),
+  ].join(':');
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -33,7 +44,7 @@ function generatePlist(nodePath: string, projectRoot: string, homeDir: string): 
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
-        <string>/usr/local/bin:/usr/bin:/bin:${homeDir}/.local/bin</string>
+        <string>${servicePath}</string>
         <key>HOME</key>
         <string>${homeDir}</string>
     </dict>
@@ -77,6 +88,24 @@ describe('plist generation', () => {
   it('uses the correct node path', () => {
     const plist = generatePlist('/opt/node/bin/node', '/home/user/nanoclaw', '/home/user');
     expect(plist).toContain('<string>/opt/node/bin/node</string>');
+    expect(plist).toContain(
+      '<string>/opt/node/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/home/user/.local/bin</string>',
+    );
+  });
+
+  it('keeps Homebrew tools on PATH for Apple Silicon services', () => {
+    const plist = generatePlist('/opt/homebrew/bin/node', '/Users/test/nanoclaw', '/Users/test');
+    expect(plist).toContain('<string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/Users/test/.local/bin</string>');
+  });
+
+  it('keeps separately installed Bun and Codex directories on PATH', () => {
+    const plist = generatePlist('/opt/homebrew/bin/node', '/Users/test/nanoclaw', '/Users/test', [
+      '/Users/test/.nvm/versions/node/v22/bin/bun',
+      '/Applications/Codex/bin/codex',
+    ]);
+    expect(plist).toContain(
+      '<string>/opt/homebrew/bin:/Users/test/.nvm/versions/node/v22/bin:/Applications/Codex/bin:/usr/local/bin:/usr/bin:/bin:/Users/test/.local/bin</string>',
+    );
   });
 
   it('points to dist/index.js', () => {

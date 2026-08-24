@@ -31,6 +31,7 @@ import { stripHarnessTagArtifacts } from './harness-tag-strip.js';
 import { isUploadTraceCommand, uploadTrace } from './upload-trace.js';
 import type { AgentProvider, AgentQuery, ProviderEvent, ProviderExchange } from './providers/types.js';
 import { LiveActivityReporter } from './live-activity.js';
+import { deliverProviderFile } from './provider-file-delivery.js';
 
 const POLL_INTERVAL_MS = 1000;
 const ACTIVE_POLL_INTERVAL_MS = 500;
@@ -592,6 +593,9 @@ export async function processQuery(
             assessment: event.assessment,
           }),
         });
+      } else if (event.type === 'file') {
+        const messageId = await deliverProviderFile(event.path, routing);
+        log(`Provider file staged for delivery: ${event.path} (${messageId})`);
       } else if (event.type === 'text') {
         // Assistant text emitted mid-turn (e.g. between tool calls). The
         // final result only carries the LAST assistant text, so complete
@@ -753,6 +757,12 @@ function handleEvent(event: ProviderEvent, _routing: RoutingContext, activityRep
       log(`Guardian review ${event.reviewId}: ${event.status}${event.riskLevel ? ` (${event.riskLevel})` : ''}`);
       break;
     case 'live-activity':
+      break;
+    case 'file':
+      log(`File: ${event.path}`);
+      break;
+    case 'activity':
+    case 'text':
       break;
   }
 }

@@ -13,7 +13,16 @@ import { log } from '../src/log.js';
 import { getLaunchdLabel, getSystemdUnit } from '../src/install-slug.js';
 import { writeUpgradeState } from '../src/upgrade-state.js';
 import { cleanupUnhealthyPeers } from './peer-cleanup.js';
-import { commandExists, getPlatform, getNodePath, getServiceManager, hasSystemd, isRoot, isWSL } from './platform.js';
+import {
+  commandExists,
+  getCommandPath,
+  getPlatform,
+  getNodePath,
+  getServiceManager,
+  hasSystemd,
+  isRoot,
+  isWSL,
+} from './platform.js';
 import { emitStatus } from './status.js';
 
 export async function run(_args: string[]): Promise<void> {
@@ -72,7 +81,12 @@ export async function run(_args: string[]): Promise<void> {
   }
 
   if (platform === 'macos') {
-    setupLaunchd(projectRoot, nodePath, homeDir);
+    setupLaunchd(
+      projectRoot,
+      nodePath,
+      homeDir,
+      ['bun', 'codex'].map(getCommandPath).filter((value): value is string => value !== null),
+    );
   } else if (platform === 'linux') {
     setupLinux(projectRoot, nodePath, homeDir);
   } else {
@@ -123,12 +137,26 @@ function installCliSymlink(projectRoot: string, homeDir: string): void {
   }
 }
 
-function setupLaunchd(projectRoot: string, nodePath: string, homeDir: string): void {
+function setupLaunchd(projectRoot: string, nodePath: string, homeDir: string, toolPaths: string[]): void {
   // Per-checkout service label so multiple NanoClaw installs can coexist
   // without clobbering each other's plist.
   const label = getLaunchdLabel(projectRoot);
   const plistPath = path.join(homeDir, 'Library', 'LaunchAgents', `${label}.plist`);
   fs.mkdirSync(path.dirname(plistPath), { recursive: true });
+  // launchd does not inherit the interactive shell's PATH. Keep the directory
+  // that supplied Node first so sibling tools such as bun and codex remain
+  // discoverable, including Homebrew's Apple Silicon prefix.
+  const servicePath = [
+    ...new Set([
+      path.dirname(nodePath),
+      ...toolPaths.map(path.dirname),
+      '/opt/homebrew/bin',
+      '/usr/local/bin',
+      '/usr/bin',
+      '/bin',
+      `${homeDir}/.local/bin`,
+    ]),
+  ].join(':');
 
   const plist = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -150,7 +178,7 @@ function setupLaunchd(projectRoot: string, nodePath: string, homeDir: string): v
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
-        <string>/usr/local/bin:/usr/bin:/bin:${homeDir}/.local/bin</string>
+        <string>${servicePath}</string>
         <key>HOME</key>
         <string>${homeDir}</string>
     </dict>

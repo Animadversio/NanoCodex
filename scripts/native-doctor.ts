@@ -2,7 +2,7 @@ import { spawnSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 
-import { readEnvFile } from '../src/env.js';
+import { readEnvFile, resolveEnvFilePath } from '../src/env.js';
 
 const MIN_CODEX_VERSION = [0, 146, 0] as const;
 let failed = false;
@@ -48,7 +48,7 @@ report(
 const login = command('codex', ['login', 'status']);
 report(login.ok, 'Codex login', login.output || 'run `codex login`');
 
-const discordEnvFile = process.env.NANOCLAW_DISCORD_ENV_FILE;
+const discordEnvFile = resolveEnvFilePath('NANOCLAW_DISCORD_ENV_FILE');
 const env = readEnvFile(['DISCORD_BOT_TOKEN'], discordEnvFile);
 report(
   Boolean(env.DISCORD_BOT_TOKEN),

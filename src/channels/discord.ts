@@ -4,7 +4,7 @@
  */
 import { createDiscordAdapter } from '@chat-adapter/discord';
 
-import { readEnvFile } from '../env.js';
+import { readEnvFile, resolveEnvFilePath } from '../env.js';
 import { log } from '../log.js';
 import type { ChannelDefaults } from './adapter.js';
 import { createChatSdkBridge, type ReplyContext } from './chat-sdk-bridge.js';
@@ -102,9 +102,10 @@ function unwrapForwards(adapter: ReturnType<typeof createDiscordAdapter>): void 
 
 registerChannelAdapter('discord', {
   factory: () => {
+    const discordEnvFile = resolveEnvFilePath('NANOCLAW_DISCORD_ENV_FILE');
     const env = readEnvFile(
       ['DISCORD_BOT_TOKEN', 'DISCORD_PUBLIC_KEY', 'DISCORD_APPLICATION_ID', 'DISCORD_THREAD_SPAWN_POLICY'],
-      process.env.NANOCLAW_DISCORD_ENV_FILE,
+      discordEnvFile,
     );
     if (!env.DISCORD_BOT_TOKEN) return null;
     const threadSpawnPolicy = resolveDiscordThreadSpawnPolicy(env.DISCORD_THREAD_SPAWN_POLICY);

@@ -39,3 +39,18 @@ export function readEnvFile(keys: string[], envFile = path.join(process.cwd(), '
 
   return result;
 }
+
+/**
+ * Resolve a pointer to a secondary credentials file. A process-level value
+ * wins, while the local `.env` fallback lets launchd/systemd recover the same
+ * pointer without copying credentials into the project or child processes.
+ */
+export function resolveEnvFilePath(
+  key: string,
+  explicitValue: string | undefined = process.env[key],
+  configFile = path.join(process.cwd(), '.env'),
+): string | undefined {
+  const explicit = explicitValue?.trim();
+  if (explicit) return explicit;
+  return readEnvFile([key], configFile)[key]?.trim() || undefined;
+}

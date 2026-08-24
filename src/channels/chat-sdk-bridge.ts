@@ -349,6 +349,22 @@ export interface ChatSdkBridgeConfig {
    * and reactions still target the head of the reply.
    */
   maxTextLength?: number;
+  /** Optional host-owned slash commands handled without entering an agent context. */
+  slashCommands?: {
+    commands: string[];
+    handle(event: ChatSdkSlashCommandEvent): Promise<string | null>;
+  };
+}
+
+export interface ChatSdkSlashCommandEvent {
+  command: string;
+  text: string;
+  instance: string;
+  platformId: string;
+  threadId: string;
+  userId: string;
+  userName: string;
+  isGroup: boolean;
 }
 
 /**
@@ -544,6 +560,30 @@ export function createChatSdkBridge(config: ChatSdkBridgeConfig): ChannelAdapter
         state,
         logger: 'silent',
       });
+
+      const slashCommands = config.slashCommands;
+      if (slashCommands) {
+        chat.onSlashCommand(slashCommands.commands, async (event) => {
+          const threadId = event.channel.id;
+          try {
+            const response = await slashCommands.handle({
+              command: event.command,
+              text: event.text,
+              instance: instanceKey,
+              platformId: adapter.channelIdFromThreadId(threadId),
+              threadId,
+              userId: event.user.userId,
+              userName: event.user.fullName || event.user.userName,
+              isGroup: adapter.isDM ? !adapter.isDM(threadId) : true,
+            });
+            if (response) await event.channel.post(response);
+            // eslint-disable-next-line no-catch-all/no-catch-all -- an interaction must receive a terminal response even when a host control fails
+          } catch (err) {
+            log.error('Host-owned slash command failed', { command: event.command, instance: instanceKey, err });
+            await event.channel.post('NanoCodex could not complete that command. Check the host logs for details.');
+          }
+        });
+      }
 
       // Four SDK dispatch paths — bridge just forwards. All per-wiring
       // engage / accumulate / drop / subscribe decisions live in the host

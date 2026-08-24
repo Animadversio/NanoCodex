@@ -5,9 +5,11 @@
 import { createDiscordAdapter } from '@chat-adapter/discord';
 
 import { readEnvFile } from '../env.js';
+import { log } from '../log.js';
 import type { ChannelDefaults } from './adapter.js';
 import { createChatSdkBridge, type ReplyContext } from './chat-sdk-bridge.js';
 import { registerChannelAdapter } from './channel-registry.js';
+import { handleNanoCodexDiscordCommand, registerNanoCodexDiscordCommand } from './discord-context-controls.js';
 
 /**
  * Dedicated bot app on a threaded platform. group threads:true matches the
@@ -113,17 +115,36 @@ registerChannelAdapter('discord', {
       autoCreateThreadsOnMention: threadSpawnPolicy === 'mention',
     });
     unwrapForwards(discordAdapter);
-    return createChatSdkBridge({
+    const bridge = createChatSdkBridge({
       adapter: discordAdapter,
       concurrency: 'concurrent',
       botToken: env.DISCORD_BOT_TOKEN,
       extractReplyContext,
       supportsThreads: true,
       defaults: DISCORD_DEFAULTS,
+      slashCommands: {
+        commands: ['/nanocodex where', '/nanocodex tree'],
+        handle: handleNanoCodexDiscordCommand,
+      },
       // Discord rejects messages over 2000 chars; without this the bridge
       // would let long agent replies fail instead of splitting them.
       maxTextLength: 2000,
     });
+    const setup = bridge.setup.bind(bridge);
+    bridge.setup = async (hostConfig) => {
+      try {
+        await registerNanoCodexDiscordCommand({
+          applicationId: env.DISCORD_APPLICATION_ID,
+          botToken: env.DISCORD_BOT_TOKEN,
+        });
+        log.info('Discord application command registered', { command: 'nanocodex' });
+        // eslint-disable-next-line no-catch-all/no-catch-all -- command sync must not take the Discord gateway offline
+      } catch (err) {
+        log.warn('Discord application command registration failed; gateway will still start', { err });
+      }
+      await setup(hostConfig);
+    };
+    return bridge;
   },
   defaults: DISCORD_DEFAULTS,
 });

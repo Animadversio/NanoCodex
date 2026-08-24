@@ -38,6 +38,8 @@ Fill `DISCORD_BOT_TOKEN` in `.env`. `DISCORD_APPLICATION_ID` and `DISCORD_PUBLIC
 
 Discord thread creation is manual by default: a top-level `@mention` stays in the channel's shared context, while a Discord thread created by a person becomes a context branch when the bot first handles a message there. Set `DISCORD_THREAD_SPAWN_POLICY=mention` in the Discord environment file only if you want the older mention-created-thread behavior.
 
+NanoCodex registers a `/nanocodex` Discord command at startup. Use `/nanocodex where` to inspect the context bound to the current channel or thread, and `/nanocodex tree` to see that channel's trunk and branches. These commands are handled by the host and are never added to the model's conversation history.
+
 ```bash
 pnpm native:doctor
 ```

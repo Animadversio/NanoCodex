@@ -36,6 +36,18 @@ diff --git a/dist/index.js b/dist/index.js
      this.botUserId = applicationId;
      this.logger = config.logger ?? new ConsoleLogger("info").child("discord");
      this.userName = config.userName ?? "bot";
+@@ -752,9 +754,9 @@ var DiscordAdapter = class _DiscordAdapter {
+           valueParts.push(String(option.value));
+           continue;
+         }
+-        if (option.options && option.options.length > 0) {
++        if (option.type === 1 || option.type === 2) {
+           commandParts.push(option.name);
+-          collect(option.options);
++          collect(option.options ?? []);
+         }
+       }
+     };
 @@ -928,7 +930,7 @@ var DiscordAdapter = class _DiscordAdapter {
        (roleId) => this.mentionRoleIds.includes(roleId)
      );

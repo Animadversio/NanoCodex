@@ -48,6 +48,32 @@ describe('Discord thread spawn policy', () => {
   });
 });
 
+describe('Discord slash command parsing', () => {
+  it('keeps optionless subcommands in the command path', () => {
+    const adapter = createDiscordAdapter({
+      botToken: 'token',
+      publicKey: 'a'.repeat(64),
+      applicationId: 'bot-id',
+    });
+    const { parseSlashCommand } = adapter as unknown as {
+      parseSlashCommand: (
+        name: string,
+        options: Array<{ type: number; name: string; value?: string; options?: unknown[] }>,
+      ) => { command: string; text: string };
+    };
+
+    expect(parseSlashCommand.call(adapter, 'nanocodex', [{ type: 1, name: 'tree' }])).toEqual({
+      command: '/nanocodex tree',
+      text: '',
+    });
+    expect(
+      parseSlashCommand.call(adapter, 'project', [
+        { type: 2, name: 'issue', options: [{ type: 1, name: 'create', options: [] }] },
+      ]),
+    ).toEqual({ command: '/project issue create', text: '' });
+  });
+});
+
 describe('Discord DM mention handling', () => {
   it('keeps DM text but clears the adapter hint that creates an invalid guild thread', () => {
     const data = {

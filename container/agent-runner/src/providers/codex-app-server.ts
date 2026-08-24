@@ -117,6 +117,7 @@ export interface ThreadParams {
 export interface TurnParams {
   threadId: string;
   inputText: string;
+  localImagePaths?: string[];
   model?: string;
   effort?: string;
   cwd?: string;
@@ -358,7 +359,10 @@ export async function startOrResumeCodexThread(
 export async function startCodexTurn(server: AppServer, params: TurnParams): Promise<string> {
   const resp = await sendCodexRequest(server, 'turn/start', {
     threadId: params.threadId,
-    input: [{ type: 'text', text: params.inputText, text_elements: [] }],
+    input: [
+      { type: 'text', text: params.inputText, text_elements: [] },
+      ...(params.localImagePaths ?? []).map((imagePath) => ({ type: 'localImage', path: imagePath })),
+    ],
     model: params.model,
     effort: params.effort,
     cwd: params.cwd,

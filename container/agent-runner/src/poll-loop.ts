@@ -19,6 +19,7 @@ import {
 } from './db/session-state.js';
 import {
   formatMessages,
+  extractLocalImagePaths,
   extractRouting,
   categorizeMessage,
   isClearCommand,
@@ -225,6 +226,7 @@ export async function runPollLoop(config: PollLoopConfig): Promise<void> {
 
     const query = config.provider.query({
       prompt,
+      localImagePaths: extractLocalImagePaths(keep),
       continuation,
       cwd: config.cwd,
       systemContext: config.systemContext,

@@ -61,6 +61,27 @@ describe('CodexProvider active turns', () => {
     expect(fake.killed).toBe(true);
   });
 
+  it('attaches native local images to the initial Codex turn', async () => {
+    const fake = createFakeCodexRuntime();
+    const provider = createCodexProvider({}, fake.runtime);
+    const query = provider.query({
+      prompt: 'Describe this image',
+      localImagePaths: ['/workspace/inbox/m1/photo.png'],
+      cwd: '/workspace/agent',
+    });
+    const collect = collectEvents(query.events, []);
+
+    await waitFor(() => fake.startCalls.length === 1);
+    query.end();
+    fake.completeTurn('A photo');
+    await collect;
+
+    expect(fake.startCalls[0]).toMatchObject({
+      inputText: 'Describe this image',
+      localImagePaths: ['/workspace/inbox/m1/photo.png'],
+    });
+  });
+
   it('queues follow-ups for the next turn when steering is rejected', async () => {
     const fake = createFakeCodexRuntime({ rejectSteer: true });
     const provider = createCodexProvider({}, fake.runtime);

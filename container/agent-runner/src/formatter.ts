@@ -17,6 +17,49 @@ export function isSessionEcho(msg: MessageInRow): boolean {
   return msg.channel_type === SESSION_ECHO_CHANNEL;
 }
 
+const MAX_LOCAL_IMAGE_INPUTS = 20;
+const SUPPORTED_IMAGE_MIME_TYPES = new Set(['image/gif', 'image/jpeg', 'image/png', 'image/webp']);
+const SUPPORTED_IMAGE_EXTENSIONS = new Set(['.gif', '.jpeg', '.jpg', '.png', '.webp']);
+
+/**
+ * Collect staged image attachments for providers with native vision input.
+ * Paths must remain inside the active session directory; copied context from
+ * another session deliberately cannot attach files from that session.
+ */
+export function extractLocalImagePaths(messages: MessageInRow[]): string[] {
+  const imagePaths = new Set<string>();
+
+  for (const msg of messages) {
+    if (isSessionEcho(msg)) continue;
+    const content = parseContent(msg.content);
+    if (!Array.isArray(content.attachments)) continue;
+
+    for (const attachment of content.attachments) {
+      if (!attachment || typeof attachment !== 'object' || typeof attachment.localPath !== 'string') continue;
+
+      const mimeType = typeof attachment.mimeType === 'string' ? attachment.mimeType.toLowerCase() : '';
+      const name =
+        typeof attachment.name === 'string'
+          ? attachment.name
+          : typeof attachment.filename === 'string'
+            ? attachment.filename
+            : attachment.localPath;
+      const isSupportedImage =
+        SUPPORTED_IMAGE_MIME_TYPES.has(mimeType) || SUPPORTED_IMAGE_EXTENSIONS.has(path.extname(name).toLowerCase());
+      if (!isSupportedImage) continue;
+
+      const resolved = path.resolve(SESSION_DIR, attachment.localPath);
+      const relative = path.relative(SESSION_DIR, resolved);
+      if (!relative || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) continue;
+
+      imagePaths.add(resolved);
+      if (imagePaths.size >= MAX_LOCAL_IMAGE_INPUTS) return [...imagePaths];
+    }
+  }
+
+  return [...imagePaths];
+}
+
 /**
  * Command categories for messages starting with '/'.
  * - admin: sender must be in NANOCLAW_ADMIN_USER_IDS

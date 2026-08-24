@@ -110,6 +110,9 @@ export interface QueryInput {
   /** Initial prompt (already formatted by agent-runner). */
   prompt: string;
 
+  /** Local image files that belong to the initial prompt. */
+  localImagePaths?: string[];
+
   /**
    * Opaque continuation token from a previous query. The provider decides
    * what this means (session ID, thread ID, nothing at all).

@@ -8,6 +8,7 @@ import {
   CODEX_APP_SERVER_ARGS,
   attachCodexAutoApproval,
   buildCodexProcessEnv,
+  startCodexTurn,
   startOrResumeCodexThread,
   tomlBasicString,
   writeCodexConfigToml,
@@ -252,6 +253,29 @@ describe('Codex thread SessionStart source', () => {
   });
 });
 
+describe('Codex turn input', () => {
+  it('serializes local images as native turn inputs', async () => {
+    const { server, requests } = autoRespondingServer();
+
+    await startCodexTurn(server, {
+      threadId: 'thread-1',
+      inputText: 'Describe it',
+      localImagePaths: ['/workspace/inbox/m1/photo.png'],
+    });
+
+    expect(requests[0]).toMatchObject({
+      method: 'turn/start',
+      params: {
+        threadId: 'thread-1',
+        input: [
+          { type: 'text', text: 'Describe it', text_elements: [] },
+          { type: 'localImage', path: '/workspace/inbox/m1/photo.png' },
+        ],
+      },
+    });
+  });
+});
+
 describe('Codex client request boundary', () => {
   it('refuses to manufacture filesystem or network permission grants', () => {
     const { server, writes } = fakeServer();
@@ -363,7 +387,9 @@ function autoRespondingServer(): {
           const request = JSON.parse(line) as { id: number; method: string; params: Record<string, unknown> };
           requests.push(request);
           const threadId = (request.params.threadId as string | undefined) ?? 'thread-new';
-          server.pending.get(request.id)?.resolve({ id: request.id, result: { thread: { id: threadId } } });
+          const result =
+            request.method === 'turn/start' ? { turn: { id: 'turn-new' } } : { thread: { id: threadId } };
+          server.pending.get(request.id)?.resolve({ id: request.id, result });
         },
       },
     },

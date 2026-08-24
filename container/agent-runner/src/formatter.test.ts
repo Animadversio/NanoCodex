@@ -10,10 +10,12 @@
  * stable for the numeric parts we assert on (hour, minute, year).
  */
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import path from 'path';
 
 import { initTestSessionDb, closeSessionDb, getInboundDb } from './mailbox/sqlite/connection.js';
 import { getPendingMessages } from './db/messages-in.js';
-import { formatMessages, stripInternalTags, stripLegacyTaskContract } from './formatter.js';
+import { extractLocalImagePaths, formatMessages, stripInternalTags, stripLegacyTaskContract } from './formatter.js';
+import { SESSION_DIR } from './paths.js';
 import { TIMEZONE, formatLocalTime } from './timezone.js';
 
 beforeEach(() => {
@@ -65,6 +67,22 @@ describe('context timezone header', () => {
     const firstMsgIdx = result.indexOf('<message ');
     expect(ctxIdx).toBeGreaterThanOrEqual(0);
     expect(firstMsgIdx).toBeGreaterThan(ctxIdx);
+  });
+});
+
+describe('native image inputs', () => {
+  it('collects supported staged images while excluding files and escaping paths', () => {
+    insertMessage('m1', 'chat-sdk', {
+      sender: 'Alice',
+      text: 'What is in this image?',
+      attachments: [
+        { name: 'photo.png', mimeType: 'image/png', localPath: 'inbox/m1/photo.png' },
+        { name: 'notes.txt', mimeType: 'text/plain', localPath: 'inbox/m1/notes.txt' },
+        { name: 'escape.jpg', mimeType: 'image/jpeg', localPath: '../escape.jpg' },
+      ],
+    });
+
+    expect(extractLocalImagePaths(getPendingMessages())).toEqual([path.join(SESSION_DIR, 'inbox/m1/photo.png')]);
   });
 });
 

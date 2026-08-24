@@ -235,7 +235,9 @@ export class CodexProvider implements AgentProvider {
   query(input: QueryInput): AgentQuery {
     if (!this.memorySessionHook) throw new Error('Codex memory session hook was not registered');
     const memorySessionHook = this.memorySessionHook;
-    const pending: string[] = [input.prompt];
+    const pending: Array<{ inputText: string; localImagePaths?: string[] }> = [
+      { inputText: input.prompt, localImagePaths: input.localImagePaths },
+    ];
     let waiting: (() => void) | null = null;
     let ended = false;
     let aborted = false;
@@ -252,12 +254,12 @@ export class CodexProvider implements AgentProvider {
     const pushOrSteer = (message: string): void => {
       if (activeServer && activeThreadId && activeTurnId) {
         void this.runtime.steerCodexTurn(activeServer, activeThreadId, activeTurnId, message).catch(() => {
-          pending.push(message);
+          pending.push({ inputText: message });
           wake();
         });
         return;
       }
-      pending.push(message);
+      pending.push({ inputText: message });
       wake();
     };
 
@@ -295,11 +297,12 @@ export class CodexProvider implements AgentProvider {
           if (aborted) return;
           if (pending.length === 0 && ended) return;
 
-          const text = pending.shift()!;
+          const pendingTurn = pending.shift()!;
           yield* runOneTurn(
             server,
             threadId,
-            text,
+            pendingTurn.inputText,
+            pendingTurn.localImagePaths,
             self.model,
             self.effort,
             input.cwd,
@@ -361,6 +364,7 @@ async function* runOneTurn(
   server: AppServer,
   threadId: string,
   inputText: string,
+  localImagePaths: string[] | undefined,
   model: string | undefined,
   effort: string | undefined,
   cwd: string,
@@ -564,6 +568,7 @@ async function* runOneTurn(
     turnId = await startTurn(server, {
       threadId,
       inputText,
+      localImagePaths,
       model,
       effort,
       cwd,

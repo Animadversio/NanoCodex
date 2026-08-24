@@ -108,12 +108,40 @@ CREATE TABLE user_dms (
   PRIMARY KEY (user_id, channel_type)
 );
 
--- Sessions: one folder = one session = one container when running
+-- Durable logical conversations. A channel is a trunk; a platform thread is
+-- normally a branch whose Codex thread is forked from its parent.
+CREATE TABLE context_nodes (
+  id                  TEXT PRIMARY KEY,
+  agent_group_id      TEXT NOT NULL REFERENCES agent_groups(id),
+  kind                TEXT NOT NULL, -- 'trunk' | 'branch' | 'standalone'
+  parent_context_id   TEXT REFERENCES context_nodes(id),
+  forked_from_turn_id TEXT,
+  codex_thread_id     TEXT,
+  status              TEXT NOT NULL DEFAULT 'active',
+  created_at          TEXT NOT NULL,
+  updated_at          TEXT NOT NULL
+);
+
+-- Transport addresses are pointers to contexts, not the contexts themselves.
+-- thread_key='' denotes the channel-level surface.
+CREATE TABLE surface_bindings (
+  id                 TEXT PRIMARY KEY,
+  agent_group_id     TEXT NOT NULL REFERENCES agent_groups(id),
+  messaging_group_id TEXT NOT NULL REFERENCES messaging_groups(id),
+  thread_key         TEXT NOT NULL DEFAULT '',
+  context_node_id    TEXT NOT NULL REFERENCES context_nodes(id),
+  created_at         TEXT NOT NULL,
+  updated_at         TEXT NOT NULL,
+  UNIQUE(agent_group_id, messaging_group_id, thread_key)
+);
+
+-- Runtime sessions: replaceable runner/mailbox processes attached to contexts.
 CREATE TABLE sessions (
   id                 TEXT PRIMARY KEY,
   agent_group_id     TEXT NOT NULL REFERENCES agent_groups(id),
   messaging_group_id TEXT REFERENCES messaging_groups(id),
   thread_id          TEXT,
+  context_node_id    TEXT REFERENCES context_nodes(id),
   agent_provider     TEXT,
   status             TEXT DEFAULT 'active',
   container_status   TEXT DEFAULT 'stopped',

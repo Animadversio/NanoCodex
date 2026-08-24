@@ -3,6 +3,16 @@ export type { DbConfig, DbDriver, DbDialect, DbInitOptions, DbRole, RunResult } 
 export { runMigrations } from './migrations/index.js';
 export type { MigrationMode, MigrationRunOptions } from './migrations/index.js';
 export {
+  getContextNode,
+  getContextNodesByAgentGroup,
+  getSurfaceBindingsByAgentGroup,
+  findSurfaceBinding,
+  bindSurfaceToContext,
+  resolveSurfaceContext,
+  createStandaloneContext,
+  setContextCodexThreadId,
+} from './context-nodes.js';
+export {
   createAgentGroup,
   getAgentGroup,
   getAgentGroupByFolder,
@@ -30,10 +40,12 @@ export {
   getSession,
   findSession,
   findSessionByAgentGroup,
+  findSessionByContext,
   getSessionsByAgentGroup,
   getActiveSessions,
   getRunningSessions,
   updateSession,
+  attachSessionContext,
   deleteSession,
   createPendingQuestion,
   getPendingQuestion,

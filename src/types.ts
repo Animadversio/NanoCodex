@@ -156,11 +156,38 @@ export interface Session {
   agent_group_id: string;
   messaging_group_id: string | null;
   thread_id: string | null;
+  /** Durable logical context served by this replaceable runtime session. */
+  context_node_id?: string | null;
   agent_provider: string | null;
   status: 'active' | 'closed';
   container_status: 'running' | 'idle' | 'stopped';
   last_active: string | null;
   created_at: string;
+}
+
+export type ContextNodeKind = 'trunk' | 'branch' | 'standalone';
+
+export interface ContextNode {
+  id: string;
+  agent_group_id: string;
+  kind: ContextNodeKind;
+  parent_context_id: string | null;
+  forked_from_turn_id: string | null;
+  codex_thread_id: string | null;
+  status: 'active' | 'archived';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SurfaceBinding {
+  id: string;
+  agent_group_id: string;
+  messaging_group_id: string;
+  /** Empty string denotes the channel surface; non-empty values are threads. */
+  thread_key: string;
+  context_node_id: string;
+  created_at: string;
+  updated_at: string;
 }
 
 // ── Session DB entities ──

@@ -108,6 +108,10 @@ export interface ThreadParams {
   cwd: string;
   baseInstructions?: string;
   developerInstructions?: string;
+  /** Source thread for a new logical branch. Ignored when resuming. */
+  forkFromThreadId?: string;
+  /** Optional inclusive turn boundary for a future context-pointer operation. */
+  forkFromTurnId?: string;
 }
 
 export interface TurnParams {
@@ -315,6 +319,26 @@ export async function startOrResumeCodexThread(
       throw new Error(`thread/resume failed: ${resp.error.message}`);
     }
     log(`Stale thread ${threadId}; starting fresh thread.`);
+  }
+
+  if (params.forkFromThreadId) {
+    const resp = await sendCodexRequest(server, 'thread/fork', {
+      threadId: params.forkFromThreadId,
+      lastTurnId: params.forkFromTurnId,
+      ...commonParams,
+      ephemeral: false,
+      excludeTurns: true,
+    });
+    if (!resp.error) {
+      const result = resp.result as { thread?: { id?: string } } | undefined;
+      const forkedThreadId = result?.thread?.id;
+      if (!forkedThreadId) throw new Error('thread/fork response missing thread ID');
+      return forkedThreadId;
+    }
+    if (!STALE_THREAD_RE.test(resp.error.message)) {
+      throw new Error(`thread/fork failed: ${resp.error.message}`);
+    }
+    log(`Stale fork source ${params.forkFromThreadId}; starting fresh thread.`);
   }
 
   const resp = await sendCodexRequest(server, 'thread/start', {

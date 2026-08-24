@@ -201,6 +201,9 @@ export class CodexProvider implements AgentProvider {
   private readonly mcpServers: Record<string, McpServerConfig>;
   private readonly model?: string;
   private readonly effort?: CodexReasoningEffort;
+  private readonly forkFromThreadId?: string;
+  private readonly forkFromTurnId?: string;
+  private readonly contextThreadId?: string;
   private readonly runtime: CodexRuntimeDeps;
   private memorySessionHook?: CodexMemorySessionHook;
 
@@ -209,6 +212,9 @@ export class CodexProvider implements AgentProvider {
     this.model = options.model;
     this.runtime = runtime;
     this.effort = normalizeEffort(options.effort);
+    this.forkFromThreadId = options.env?.NANOCLAW_CODEX_FORK_THREAD_ID?.trim() || undefined;
+    this.forkFromTurnId = options.env?.NANOCLAW_CODEX_FORK_TURN_ID?.trim() || undefined;
+    this.contextThreadId = options.env?.NANOCLAW_CODEX_CONTEXT_THREAD_ID?.trim() || undefined;
   }
 
   registerMemorySessionHook(hook: CodexMemorySessionHook): void {
@@ -260,7 +266,7 @@ export class CodexProvider implements AgentProvider {
       activeServer = server;
       self.runtime.attachCodexAutoApproval(server);
 
-      let threadId: string | undefined = input.continuation;
+      let threadId: string | undefined = input.continuation ?? self.contextThreadId;
       let initYielded = false;
 
       try {
@@ -269,6 +275,8 @@ export class CodexProvider implements AgentProvider {
           model: self.model,
           cwd: input.cwd,
           baseInstructions: input.systemContext?.instructions,
+          forkFromThreadId: self.forkFromThreadId,
+          forkFromTurnId: self.forkFromTurnId,
         });
         activeThreadId = threadId;
 

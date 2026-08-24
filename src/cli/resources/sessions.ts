@@ -11,7 +11,7 @@ registerResource({
   plural: 'sessions',
   table: 'sessions',
   description:
-    'Session — the runtime unit. Maps one (agent_group, messaging_group, thread) combination to a container with its own inbound.db and outbound.db. Created automatically by the router when a message arrives.',
+    'Runtime session — the replaceable runner/mailbox attached to a durable context node. Created automatically when a bound surface receives a message.',
   idColumn: 'id',
   scopeField: 'agent_group_id',
   columns: [
@@ -26,6 +26,11 @@ registerResource({
       name: 'thread_id',
       type: 'string',
       description: 'Thread ID. Only set for per-thread session mode.',
+    },
+    {
+      name: 'context_node_id',
+      type: 'string',
+      description: 'Durable logical context this runtime currently serves.',
     },
     {
       name: 'agent_provider',

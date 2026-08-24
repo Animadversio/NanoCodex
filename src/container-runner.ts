@@ -28,6 +28,7 @@ import { CONTAINER_PLUGINS_DIR, materializeContainerJson } from './container-con
 import { getContainerConfig } from './db/container-configs.js';
 import { updateContainerConfigScalars } from './db/container-configs.js';
 import { CONTAINER_RUNTIME_BIN } from './container-runtime.js';
+import { contextRuntimeEnvironment } from './context-runtime.js';
 import { composeGroupClaudeMd } from './claude-md-compose.js';
 import { getAgentGroup } from './db/agent-groups.js';
 import { getDb, hasTable } from './db/connection.js';
@@ -190,6 +191,7 @@ async function spawnContainer(session: Session): Promise<void> {
   const mounts = await buildMounts(agentGroup, session, containerConfig, provider, contribution);
   const containerName = `nanoclaw-v2-${agentGroup.folder}-${Date.now()}`;
   const mailboxEnvironment = await mailbox.runnerEnvironment(mailboxKey);
+  const contextEnvironment = await contextRuntimeEnvironment(session);
 
   const driver = getSessionDriver();
   // The gateway's per-session contribution — typed env and mounts (and, on a
@@ -220,7 +222,7 @@ async function spawnContainer(session: Session): Promise<void> {
     containerConfig,
     contribution,
     gateway,
-    mailboxEnvironment,
+    mailboxEnvironment: { ...mailboxEnvironment, ...contextEnvironment },
   });
 
   log.info('Spawning session', { sessionId: session.id, agentGroup: agentGroup.name, containerName });

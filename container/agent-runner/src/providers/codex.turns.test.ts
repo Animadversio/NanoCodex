@@ -4,7 +4,7 @@ import os from 'os';
 import path from 'path';
 
 import { CodexProvider, type CodexRuntimeDeps } from './codex.js';
-import type { AppServer, JsonRpcNotification, TurnParams } from './codex-app-server.js';
+import type { AppServer, JsonRpcNotification, ThreadParams, TurnParams } from './codex-app-server.js';
 import type { ProviderEvent } from './types.js';
 
 const MEMORY_SESSION_HOOK = {
@@ -20,6 +20,23 @@ function createCodexProvider(...args: ConstructorParameters<typeof CodexProvider
 }
 
 describe('CodexProvider active turns', () => {
+  it('resumes the durable context thread when a replacement runtime has no mailbox continuation', async () => {
+    const fake = createFakeCodexRuntime();
+    const provider = createCodexProvider(
+      { env: { NANOCLAW_CODEX_CONTEXT_THREAD_ID: 'thread-from-context' } },
+      fake.runtime,
+    );
+    const query = provider.query({ prompt: 'continue', cwd: '/workspace/agent' });
+    const collect = collectEvents(query.events, []);
+
+    await waitFor(() => fake.startCalls.length === 1);
+    query.end();
+    fake.completeTurn('done');
+    await collect;
+
+    expect(fake.threadCalls[0]?.threadId).toBe('thread-from-context');
+  });
+
   it('steers follow-ups into the active turn and yields liveness activity', async () => {
     const fake = createFakeCodexRuntime();
     const provider = createCodexProvider({}, fake.runtime);
@@ -345,6 +362,7 @@ function createFakeCodexRuntime(opts: { rejectSteer?: boolean } = {}) {
   const steerCalls: Array<{ threadId: string; turnId: string; inputText: string }> = [];
   const interruptCalls: Array<{ threadId: string; turnId: string }> = [];
   const approvalCalls: Array<{ threadId: string; event: Record<string, unknown> }> = [];
+  const threadCalls: Array<{ threadId: string | undefined; params: ThreadParams }> = [];
   let killed = false;
 
   const notify = (method: string, params?: Record<string, unknown>): void => {
@@ -357,7 +375,10 @@ function createFakeCodexRuntime(opts: { rejectSteer?: boolean } = {}) {
     spawnCodexAppServer: () => server,
     attachCodexAutoApproval: () => {},
     initializeCodexAppServer: async () => {},
-    startOrResumeCodexThread: async (_server, threadId) => threadId ?? 'thread-1',
+    startOrResumeCodexThread: async (_server, threadId, params) => {
+      threadCalls.push({ threadId, params });
+      return threadId ?? 'thread-1';
+    },
     startCodexTurn: async (_server, params) => {
       startCalls.push(params);
       const turnId = `turn-${startCalls.length}`;
@@ -385,6 +406,7 @@ function createFakeCodexRuntime(opts: { rejectSteer?: boolean } = {}) {
     steerCalls,
     interruptCalls,
     approvalCalls,
+    threadCalls,
     notify,
     get killed() {
       return killed;

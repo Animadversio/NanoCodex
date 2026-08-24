@@ -13,11 +13,13 @@ import { DATA_DIR } from './config.js';
 import { ensureContainedInboxDir, isPathInside } from './inbox-safety.js';
 import { getMessagingGroup } from './db/messaging-groups.js';
 import { isUniqueViolation } from './db/errors.js';
+import { bindSurfaceToContext, createStandaloneContext, resolveSurfaceContext } from './db/context-nodes.js';
 import {
   createSession,
   findSystemSession,
   findSessionByAgentGroup,
-  findSessionForAgent,
+  findSessionByContext,
+  attachSessionContext,
   getSession,
   taskThreadId,
   updateSession,
@@ -108,20 +110,59 @@ export async function resolveSession(
 ): Promise<{ session: Session; created: boolean }> {
   const key = sessionCreationKey(agentGroupId, messagingGroupId, threadId, sessionMode);
   return withSessionCreationLock(key, async () => {
+    let contextNodeId: string;
     // agent-shared: single session per agent group, regardless of messaging group
     if (sessionMode === 'agent-shared') {
       const existing = await findSessionByAgentGroup(agentGroupId);
       if (existing) {
+        let existingContextId = existing.context_node_id;
+        if (!existingContextId) {
+          existingContextId = (await createStandaloneContext(agentGroupId)).id;
+          await attachSessionContext(existing.id, existingContextId);
+          existing.context_node_id = existingContextId;
+        }
+        if (messagingGroupId) {
+          const messagingGroup = await getMessagingGroup(messagingGroupId);
+          if (!messagingGroup) throw new Error(`Messaging group not found: ${messagingGroupId}`);
+          await bindSurfaceToContext({
+            agentGroupId,
+            messagingGroupId,
+            platformId: messagingGroup.platform_id,
+            threadId,
+            contextNodeId: existingContextId,
+          });
+        }
         return { session: existing, created: false };
       }
+      contextNodeId = (await createStandaloneContext(agentGroupId)).id;
+      if (messagingGroupId) {
+        const messagingGroup = await getMessagingGroup(messagingGroupId);
+        if (!messagingGroup) throw new Error(`Messaging group not found: ${messagingGroupId}`);
+        await bindSurfaceToContext({
+          agentGroupId,
+          messagingGroupId,
+          platformId: messagingGroup.platform_id,
+          threadId,
+          contextNodeId,
+        });
+      }
     } else if (messagingGroupId) {
-      const lookupThreadId = sessionMode === 'shared' ? null : threadId;
-      // Scope lookup by agent_group_id so fan-out to multiple agents in the
-      // same chat doesn't accidentally deliver to the wrong agent's session.
-      const existing = await findSessionForAgent(agentGroupId, messagingGroupId, lookupThreadId);
+      const messagingGroup = await getMessagingGroup(messagingGroupId);
+      if (!messagingGroup) throw new Error(`Messaging group not found: ${messagingGroupId}`);
+      const { context } = await resolveSurfaceContext({
+        agentGroupId,
+        messagingGroupId,
+        platformId: messagingGroup.platform_id,
+        threadId,
+        sessionMode,
+      });
+      contextNodeId = context.id;
+      const existing = await findSessionByContext(contextNodeId);
       if (existing) {
         return { session: existing, created: false };
       }
+    } else {
+      contextNodeId = (await createStandaloneContext(agentGroupId)).id;
     }
 
     const id = generateId();
@@ -131,6 +172,7 @@ export async function resolveSession(
       agent_group_id: agentGroupId,
       messaging_group_id: messagingGroupId,
       thread_id: lookupThreadId,
+      context_node_id: contextNodeId,
       agent_provider: null,
       status: 'active',
       container_status: 'stopped',
@@ -145,9 +187,7 @@ export async function resolveSession(
       const existing =
         sessionMode === 'agent-shared'
           ? await findSessionByAgentGroup(agentGroupId)
-          : messagingGroupId
-            ? await findSessionForAgent(agentGroupId, messagingGroupId, lookupThreadId)
-            : undefined;
+          : await findSessionByContext(contextNodeId);
       if (!existing) throw error;
       return { session: existing, created: false };
     }
@@ -175,6 +215,7 @@ export async function resolveTaskSession(
       agent_group_id: agentGroupId,
       messaging_group_id: null,
       thread_id: threadId,
+      context_node_id: (await createStandaloneContext(agentGroupId)).id,
       agent_provider: null,
       status: 'active',
       container_status: 'stopped',

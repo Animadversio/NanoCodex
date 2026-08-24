@@ -37,6 +37,7 @@ import {
   parseOutboundRecord,
   parseProcessingAckRecord,
   parseSessionRoutingRecord,
+  parseStateRecord,
   parseTaskRecord,
 } from '../model.js';
 import {
@@ -411,6 +412,12 @@ export function wrapSqliteOutbound(
           )
           .all(limit) as MailboxTimelineMessage[]
       ).map((row) => ({ ...row, timestamp: sqliteTimestamp(row.timestamp) })),
+    getState: (key) => {
+      const row = readable()
+        .prepare('SELECT key, value, updated_at AS updatedAt FROM session_state WHERE key = ?')
+        .get(key) as { key: string; value: string; updatedAt: string } | undefined;
+      return row ? parseStateRecord({ ...row, updatedAt: sqliteTimestamp(row.updatedAt) }) : undefined;
+    },
   };
 }
 

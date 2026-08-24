@@ -6,6 +6,7 @@ import type {
   OutboundDelivery,
   ProcessingAckRecord,
   SessionRoutingRecord,
+  StateRecord,
   TaskRecord as CanonicalTaskRecord,
   TaskWrite,
 } from './model.js';
@@ -134,6 +135,8 @@ export interface OutboundMailbox {
   writeDirect(message: DirectOutboundMessage): Promise<void>;
   getOutboundHistory(limit: number): MailboxHistoryMessage[];
   getTopLevelOutbound(limit: number): MailboxTimelineMessage[];
+  /** Read runner-owned opaque state, such as a provider continuation token. */
+  getState(key: string): StateRecord | undefined;
 }
 
 export interface MailboxSession extends InboundMailbox, OutboundMailbox {}

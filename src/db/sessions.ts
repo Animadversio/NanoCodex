@@ -7,9 +7,9 @@ export const TASKS_SYSTEM_THREAD_ID = 'system:tasks';
 
 export async function createSession(session: Session): Promise<void> {
   await getDb().run(
-    `INSERT INTO sessions (id, agent_group_id, messaging_group_id, thread_id, agent_provider, status, container_status, last_active, created_at)
-       VALUES (@id, @agent_group_id, @messaging_group_id, @thread_id, @agent_provider, @status, @container_status, @last_active, @created_at)`,
-    session,
+    `INSERT INTO sessions (id, agent_group_id, messaging_group_id, thread_id, context_node_id, agent_provider, status, container_status, last_active, created_at)
+       VALUES (@id, @agent_group_id, @messaging_group_id, @thread_id, @context_node_id, @agent_provider, @status, @container_status, @last_active, @created_at)`,
+    { ...session, context_node_id: session.context_node_id ?? null },
   );
 }
 
@@ -69,6 +69,16 @@ export async function findSessionByAgentGroup(agentGroupId: string): Promise<Ses
        ORDER BY created_at DESC
        LIMIT 1`,
     agentGroupId,
+  );
+}
+
+/** Find the active replaceable runtime attached to one durable context. */
+export async function findSessionByContext(contextNodeId: string): Promise<Session | undefined> {
+  return getDb().get<Session>(
+    `SELECT * FROM sessions
+      WHERE context_node_id = ? AND status = 'active'
+      ORDER BY created_at DESC LIMIT 1`,
+    contextNodeId,
   );
 }
 
@@ -139,6 +149,10 @@ export async function updateSession(
   if (fields.length === 0) return;
 
   await getDb().run(`UPDATE sessions SET ${fields.join(', ')} WHERE id = @id`, values);
+}
+
+export async function attachSessionContext(id: string, contextNodeId: string): Promise<void> {
+  await getDb().run('UPDATE sessions SET context_node_id = ? WHERE id = ?', contextNodeId, id);
 }
 
 export async function deleteSession(id: string): Promise<void> {

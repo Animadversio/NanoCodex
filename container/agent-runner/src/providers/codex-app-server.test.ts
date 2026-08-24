@@ -229,6 +229,27 @@ describe('Codex thread SessionStart source', () => {
     expect(requests[0].method).toBe('thread/resume');
     expect(requests[0].params.sessionStartSource).toBeUndefined();
   });
+
+  it('forks a new branch from its parent thread', async () => {
+    const { server, requests } = autoRespondingServer();
+
+    await startOrResumeCodexThread(server, undefined, {
+      cwd: '/workspace/agent',
+      forkFromThreadId: 'thread-parent',
+      forkFromTurnId: 'turn-boundary',
+    });
+
+    expect(requests[0].method).toBe('thread/fork');
+    expect(requests[0].params).toMatchObject({
+      threadId: 'thread-parent',
+      lastTurnId: 'turn-boundary',
+      excludeTurns: true,
+      ephemeral: false,
+      approvalPolicy: 'on-request',
+      approvalsReviewer: 'auto_review',
+      sandbox: 'workspace-write',
+    });
+  });
 });
 
 describe('Codex client request boundary', () => {

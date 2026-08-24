@@ -238,7 +238,7 @@ export function getDueOutboundMessages(db: Database.Database): OutboundMessage[]
     .prepare(
       `SELECT * FROM messages_out
        WHERE (deliver_after IS NULL OR datetime(deliver_after) <= datetime('now'))
-       ORDER BY timestamp ASC`,
+       ORDER BY seq ASC`,
     )
     .all() as OutboundMessage[];
 }
@@ -253,6 +253,13 @@ export function getDeliveredIds(db: Database.Database): Set<string> {
       (r) => r.message_out_id,
     ),
   );
+}
+
+export function getDeliveredPlatformMessageId(db: Database.Database, messageOutId: string): string | null {
+  const row = db
+    .prepare("SELECT platform_message_id FROM delivered WHERE message_out_id = ? AND status = 'delivered'")
+    .get(messageOutId) as { platform_message_id: string | null } | undefined;
+  return row?.platform_message_id ?? null;
 }
 
 export function markDelivered(db: Database.Database, messageOutId: string, platformMessageId: string | null): void {

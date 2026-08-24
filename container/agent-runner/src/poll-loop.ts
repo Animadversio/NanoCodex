@@ -30,6 +30,7 @@ import {
 import { stripHarnessTagArtifacts } from './harness-tag-strip.js';
 import { isUploadTraceCommand, uploadTrace } from './upload-trace.js';
 import type { AgentProvider, AgentQuery, ProviderEvent, ProviderExchange } from './providers/types.js';
+import { LiveActivityReporter } from './live-activity.js';
 
 const POLL_INTERVAL_MS = 1000;
 const ACTIVE_POLL_INTERVAL_MS = 500;
@@ -254,6 +255,7 @@ export async function runPollLoop(config: PollLoopConfig): Promise<void> {
         continuation,
         config.provider.emitsMidTurnText === true,
         config.provider.followUpMode ?? 'push',
+        config.cwd,
       );
       if (result.continuation && result.continuation !== continuation) {
         continuation = result.continuation;
@@ -355,7 +357,10 @@ export async function processQuery(
    */
   emitsMidTurnText = false,
   followUpMode: 'push' | 'next-query' = 'push',
+  cwd = process.cwd(),
 ): Promise<QueryResult> {
+  const activityReporter = new LiveActivityReporter(routing, cwd);
+  let queryFailed = false;
   let queryContinuation: string | undefined;
   let done = false;
   let unwrappedNudged = false;
@@ -560,7 +565,7 @@ export async function processQuery(
 
   try {
     for await (const event of query.events) {
-      handleEvent(event, routing);
+      handleEvent(event, routing, activityReporter);
       touchHeartbeat();
 
       if (event.type === 'init') {
@@ -697,6 +702,7 @@ export async function processQuery(
       }
     }
   } catch (err) {
+    queryFailed = true;
     const errMsg = err instanceof Error ? err.message : String(err);
     notifyExchangeComplete(onExchangeComplete, {
       prompt: archivePrompts[0] ?? initialPrompt,
@@ -708,6 +714,7 @@ export async function processQuery(
   } finally {
     done = true;
     clearInterval(pollHandle);
+    await activityReporter.close(queryFailed);
   }
 
   return { continuation: queryContinuation };
@@ -725,7 +732,8 @@ function notifyExchangeComplete(
   }
 }
 
-function handleEvent(event: ProviderEvent, _routing: RoutingContext): void {
+function handleEvent(event: ProviderEvent, _routing: RoutingContext, activityReporter?: LiveActivityReporter): void {
+  activityReporter?.apply(event);
   switch (event.type) {
     case 'init':
       log(`Session: ${event.continuation}`);
@@ -743,6 +751,8 @@ function handleEvent(event: ProviderEvent, _routing: RoutingContext): void {
       break;
     case 'guardian-review':
       log(`Guardian review ${event.reviewId}: ${event.status}${event.riskLevel ? ` (${event.riskLevel})` : ''}`);
+      break;
+    case 'live-activity':
       break;
   }
 }

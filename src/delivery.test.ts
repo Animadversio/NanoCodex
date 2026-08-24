@@ -185,6 +185,45 @@ describe('deliverSessionMessages — concurrent invocations', () => {
   });
 });
 
+describe('deliverSessionMessages — mailbox-addressed edits', () => {
+  it('resolves an earlier outbound id to its platform message id before editing', async () => {
+    await seedAgentAndChannel();
+    const { session } = await resolveSession('ag-1', 'mg-1', null, 'shared');
+    const db = new Database(outboundDbPath('ag-1', session.id));
+    db.prepare(
+      `INSERT INTO messages_out (id, seq, timestamp, kind, platform_id, channel_type, content)
+       VALUES (?, ?, datetime('now'), 'activity', 'telegram:123', 'telegram', ?)`,
+    ).run('activity-original', 1, JSON.stringify({ text: 'working' }));
+    db.prepare(
+      `INSERT INTO messages_out (id, seq, timestamp, kind, platform_id, channel_type, content)
+       VALUES (?, ?, datetime('now'), 'activity', 'telegram:123', 'telegram', ?)`,
+    ).run(
+      'activity-edit',
+      3,
+      JSON.stringify({ operation: 'edit', messageOutId: 'activity-original', text: 'complete' }),
+    );
+    db.close();
+
+    const calls: Array<{ kind: string; content: Record<string, unknown> }> = [];
+    setDeliveryAdapter({
+      async deliver(_ct, _pid, _tid, kind, content) {
+        calls.push({ kind, content: JSON.parse(content) as Record<string, unknown> });
+        return calls.length === 1 ? 'platform-message-1' : undefined;
+      },
+    });
+
+    await deliverSessionMessages(session);
+
+    expect(calls).toEqual([
+      { kind: 'activity', content: { text: 'working' } },
+      {
+        kind: 'activity',
+        content: { operation: 'edit', messageId: 'platform-message-1', text: 'complete' },
+      },
+    ]);
+  });
+});
+
 describe('deliverSessionMessages — malformed row containment', () => {
   it('a row that fails strict parsing does not block the rest of the queue', async () => {
     await seedAgentAndChannel();

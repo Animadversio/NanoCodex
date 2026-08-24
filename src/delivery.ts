@@ -224,7 +224,7 @@ async function drainSession(session: Session): Promise<void> {
       const firstDelivery = delivered.size === 0;
       delivered.add(msg.id);
       deliveryAttempts.delete(msg.id);
-      if (msg.kind !== 'system' && msg.channelType !== 'agent') {
+      if (msg.kind !== 'system' && msg.kind !== 'activity' && msg.channelType !== 'agent') {
         pauseTypingRefreshAfterDelivery(session.id);
         if (msg.kind !== 'task_log') {
           await fanOutboundMessage(
@@ -444,6 +444,21 @@ async function deliverMessage(
     return;
   }
 
+  // Activity edits name the original outbound row instead of racing its
+  // platform delivery. Outbound rows are processed in sequence, so the
+  // original has already been delivered by the time its edit reaches here.
+  // Resolve the stable mailbox id to Discord's platform message id at the
+  // last responsible moment; a missing mapping throws and uses normal
+  // delivery retry semantics rather than silently creating a second card.
+  if (content.operation === 'edit' && typeof content.messageOutId === 'string') {
+    const platformMessageId = await withExistingMailboxSession(session.agent_group_id, session.id, (mailbox) =>
+      mailbox.getDeliveredPlatformMessageId(content.messageOutId as string),
+    );
+    if (!platformMessageId) throw new Error(`Edit target has not been delivered: ${content.messageOutId}`);
+    content.messageId = platformMessageId;
+    delete content.messageOutId;
+  }
+
   // Read file attachments from outbox if the content declares files.
   // File I/O lives in session-manager.ts (symmetric with inbound
   // extractAttachmentFiles) — delivery just hands buffers to the adapter.
@@ -457,7 +472,7 @@ async function deliverMessage(
     msg.platformId,
     msg.threadId,
     msg.kind,
-    msg.content,
+    JSON.stringify(content),
     files,
     deliverInstance,
   );

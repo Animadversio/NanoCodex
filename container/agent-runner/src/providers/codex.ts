@@ -10,6 +10,8 @@ import type {
   ProviderExchange,
   ProviderOptions,
   QueryInput,
+  LiveActivityItemKind,
+  LiveActivityUpdate,
 } from './types.js';
 import { archiveProviderExchange } from './exchange-archive.js';
 import {
@@ -77,6 +79,102 @@ function normalizeEffort(effort: string | undefined): CodexReasoningEffort | und
     throw new Error(`Unsupported Codex reasoning effort: ${effort}`);
   }
   return normalized as CodexReasoningEffort;
+}
+
+type CodexItem = Record<string, unknown> & { id?: string; type?: string };
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value : undefined;
+}
+
+function numberValue(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function activityItem(item: CodexItem): {
+  itemKind: LiveActivityItemKind;
+  label: string;
+  status: string;
+  durationMs?: number;
+  exitCode?: number;
+  output?: string;
+  paths?: string[];
+} | null {
+  switch (item.type) {
+    case 'commandExecution':
+      return {
+        itemKind: 'command',
+        label: stringValue(item.command) ?? 'command',
+        status: stringValue(item.status) ?? 'completed',
+        durationMs: numberValue(item.durationMs),
+        exitCode: numberValue(item.exitCode),
+        output: stringValue(item.aggregatedOutput),
+      };
+    case 'fileChange': {
+      const changes = Array.isArray(item.changes) ? item.changes : [];
+      const paths = changes
+        .map((change) =>
+          typeof change === 'object' && change !== null
+            ? stringValue((change as Record<string, unknown>).path)
+            : undefined,
+        )
+        .filter((value): value is string => value !== undefined);
+      return {
+        itemKind: 'file',
+        label: paths.length === 1 ? paths[0] : `${paths.length} files`,
+        status: stringValue(item.status) ?? 'completed',
+        paths,
+      };
+    }
+    case 'mcpToolCall':
+      return {
+        itemKind: 'mcp',
+        label: `${stringValue(item.server) ?? 'mcp'}/${stringValue(item.tool) ?? 'tool'}`,
+        status: stringValue(item.status) ?? 'completed',
+        durationMs: numberValue(item.durationMs),
+      };
+    case 'dynamicToolCall':
+      return {
+        itemKind: 'tool',
+        label: [stringValue(item.namespace), stringValue(item.tool) ?? 'tool'].filter(Boolean).join('/'),
+        status: stringValue(item.status) ?? (item.success === false ? 'failed' : 'completed'),
+        durationMs: numberValue(item.durationMs),
+      };
+    case 'webSearch':
+      return {
+        itemKind: 'web',
+        label: stringValue(item.query) ?? 'web search',
+        status: 'completed',
+      };
+    default:
+      return null;
+  }
+}
+
+function liveItemUpdate(item: CodexItem, completed: boolean, timestampMs?: number): LiveActivityUpdate | null {
+  if (!item.id) return null;
+  const activity = activityItem(item);
+  if (!activity) return null;
+  if (!completed) {
+    return {
+      kind: 'item-started',
+      id: item.id,
+      itemKind: activity.itemKind,
+      label: activity.label,
+      startedAtMs: timestampMs,
+    };
+  }
+  return {
+    kind: 'item-completed',
+    id: item.id,
+    itemKind: activity.itemKind,
+    label: activity.label,
+    status: activity.status,
+    durationMs: activity.durationMs,
+    exitCode: activity.exitCode,
+    output: activity.output,
+    paths: activity.paths,
+  };
 }
 
 export class CodexProvider implements AgentProvider {
@@ -264,6 +362,7 @@ async function* runOneTurn(
   let resultText = '';
   let turnDone = false;
   let turnId: string | null = null;
+  const agentMessagePhases = new Map<string, string>();
 
   // A finished turn can no longer absorb steered input: codex's turn/steer
   // against a completed turn resolves as a no-op, so a follow-up routed there
@@ -302,17 +401,70 @@ async function* runOneTurn(
         if (turn?.id) {
           turnId = turn.id;
           setActiveTurn(turn.id);
+          agentMessagePhases.clear();
+          buffer.push({ type: 'live-activity', update: { kind: 'turn-started' } });
         }
+        break;
+      }
+      case 'turn/plan/updated': {
+        const plan = Array.isArray(params.plan) ? params.plan : [];
+        const steps = plan
+          .map((entry) => {
+            if (typeof entry !== 'object' || entry === null) return null;
+            const record = entry as Record<string, unknown>;
+            const step = stringValue(record.step);
+            const status = stringValue(record.status);
+            if (!step || !status || !['pending', 'inProgress', 'completed'].includes(status)) return null;
+            return { step, status: status as 'pending' | 'inProgress' | 'completed' };
+          })
+          .filter((entry): entry is { step: string; status: 'pending' | 'inProgress' | 'completed' } => entry !== null);
+        buffer.push({
+          type: 'live-activity',
+          update: {
+            kind: 'plan',
+            explanation: stringValue(params.explanation),
+            steps,
+          },
+        });
+        break;
+      }
+      case 'turn/diff/updated': {
+        if (typeof params.diff === 'string') {
+          buffer.push({ type: 'live-activity', update: { kind: 'diff', diff: params.diff } });
+        }
+        break;
+      }
+      case 'item/started': {
+        const item = params.item as CodexItem | undefined;
+        if (!item) break;
+        if (item.type === 'agentMessage' && item.id) {
+          const phase = stringValue(item.phase);
+          if (phase) agentMessagePhases.set(item.id, phase);
+        }
+        const update = liveItemUpdate(item, false, numberValue(params.startedAtMs));
+        if (update) buffer.push({ type: 'live-activity', update });
         break;
       }
       case 'item/agentMessage/delta': {
         const delta = params.delta as string | undefined;
-        if (delta) resultText += delta;
+        const itemId = stringValue(params.itemId);
+        if (delta && (!itemId || agentMessagePhases.get(itemId) !== 'commentary')) resultText += delta;
         break;
       }
       case 'item/completed': {
-        const item = params.item as { type?: string; text?: string } | undefined;
-        if (item?.type === 'agentMessage' && item.text) resultText = item.text;
+        const item = params.item as CodexItem | undefined;
+        if (!item) break;
+        if (item.type === 'agentMessage') {
+          const text = stringValue(item.text);
+          const phase = stringValue(item.phase) ?? (item.id ? agentMessagePhases.get(item.id) : undefined);
+          if (text && phase === 'commentary') {
+            buffer.push({ type: 'live-activity', update: { kind: 'commentary', text } });
+          } else if (text) {
+            resultText = text;
+          }
+        }
+        const update = liveItemUpdate(item, true, numberValue(params.completedAtMs));
+        if (update) buffer.push({ type: 'live-activity', update });
         break;
       }
       case 'thread/status/changed': {
@@ -348,14 +500,19 @@ async function* runOneTurn(
           | { error?: { message?: string; additionalDetails?: string | null } | null; items?: unknown[] }
           | undefined;
         const agentMessage = turn?.items
-          ?.filter((item): item is { type: string; text?: string } => typeof item === 'object' && item !== null)
-          .find((item) => item.type === 'agentMessage' && item.text);
+          ?.filter(
+            (item): item is { type: string; text?: string; phase?: string } =>
+              typeof item === 'object' && item !== null,
+          )
+          .filter((item) => item.type === 'agentMessage' && item.text && item.phase !== 'commentary')
+          .at(-1);
         if (agentMessage?.text) resultText = agentMessage.text;
         if (turn?.error) {
           const msg =
             [turn.error.message, turn.error.additionalDetails].filter(Boolean).join(': ') || 'Codex turn failed';
           state.error = new Error(msg);
         }
+        buffer.push({ type: 'live-activity', update: { kind: 'turn-completed', failed: Boolean(turn?.error) } });
         finishTurn();
         break;
       }

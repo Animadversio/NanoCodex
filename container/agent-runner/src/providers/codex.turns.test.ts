@@ -183,6 +183,106 @@ describe('CodexProvider active turns', () => {
     expect(events.filter((event) => event.type === 'result')).toEqual([{ type: 'result', text: 'final answer' }]);
   });
 
+  it('maps Codex plans, commentary, tools, diffs, and completion into compact activity events', async () => {
+    const fake = createFakeCodexRuntime();
+    const provider = createCodexProvider({}, fake.runtime);
+    const query = provider.query({ prompt: 'work on it', cwd: '/workspace/agent' });
+    const events: ProviderEvent[] = [];
+    const collect = collectEvents(query.events, events);
+
+    await waitFor(() => fake.startCalls.length === 1);
+    fake.notify('turn/plan/updated', {
+      explanation: 'Checking first',
+      plan: [
+        { step: 'Inspect', status: 'completed' },
+        { step: 'Test', status: 'inProgress' },
+      ],
+    });
+    fake.notify('item/started', {
+      startedAtMs: 100,
+      item: {
+        id: 'cmd-1',
+        type: 'commandExecution',
+        command: 'pnpm test',
+        status: 'inProgress',
+      },
+    });
+    fake.notify('item/completed', {
+      completedAtMs: 350,
+      item: {
+        id: 'comment-1',
+        type: 'agentMessage',
+        phase: 'commentary',
+        text: 'The focused tests pass.',
+      },
+    });
+    fake.notify('item/completed', {
+      completedAtMs: 400,
+      item: {
+        id: 'cmd-1',
+        type: 'commandExecution',
+        command: 'pnpm test',
+        status: 'completed',
+        durationMs: 300,
+        exitCode: 0,
+        aggregatedOutput: '18 tests passed',
+      },
+    });
+    fake.notify('turn/diff/updated', {
+      diff: 'diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n-old\n+new',
+    });
+    query.end();
+    fake.completeTurn('Done.');
+    await collect;
+
+    const updates = events
+      .filter((event): event is Extract<ProviderEvent, { type: 'live-activity' }> => event.type === 'live-activity')
+      .map((event) => event.update);
+    expect(updates).toContainEqual({ kind: 'turn-started' });
+    expect(updates).toContainEqual({
+      kind: 'plan',
+      explanation: 'Checking first',
+      steps: [
+        { step: 'Inspect', status: 'completed' },
+        { step: 'Test', status: 'inProgress' },
+      ],
+    });
+    expect(updates).toContainEqual({ kind: 'commentary', text: 'The focused tests pass.' });
+    expect(updates).toContainEqual({
+      kind: 'item-completed',
+      id: 'cmd-1',
+      itemKind: 'command',
+      label: 'pnpm test',
+      status: 'completed',
+      durationMs: 300,
+      exitCode: 0,
+      output: '18 tests passed',
+      paths: undefined,
+    });
+    expect(updates).toContainEqual({
+      kind: 'diff',
+      diff: 'diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n-old\n+new',
+    });
+    expect(updates).toContainEqual({ kind: 'turn-completed', failed: false });
+    expect(events.filter((event) => event.type === 'result')).toEqual([{ type: 'result', text: 'Done.' }]);
+  });
+
+  it('emits an empty diff update so the activity card can clear transient changes', async () => {
+    const fake = createFakeCodexRuntime();
+    const provider = createCodexProvider({}, fake.runtime);
+    const query = provider.query({ prompt: 'clean it up', cwd: '/workspace/agent' });
+    const events: ProviderEvent[] = [];
+    const collect = collectEvents(query.events, events);
+
+    await waitFor(() => fake.startCalls.length === 1);
+    fake.notify('turn/diff/updated', { diff: '' });
+    query.end();
+    fake.completeTurn('Clean.');
+    await collect;
+
+    expect(events).toContainEqual({ type: 'live-activity', update: { kind: 'diff', diff: '' } });
+  });
+
   it('delivers harness-generated images as file events — the model never sends them itself', async () => {
     const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-home-'));
     const prevHome = process.env.CODEX_HOME;

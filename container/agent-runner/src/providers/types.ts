@@ -168,6 +168,37 @@ export interface AgentQuery {
   approveGuardianDeniedAction?(event: Record<string, unknown>): Promise<void>;
 }
 
+export type LiveActivityItemKind = 'command' | 'file' | 'mcp' | 'tool' | 'web';
+
+export type LiveActivityUpdate =
+  | { kind: 'turn-started' }
+  | { kind: 'commentary'; text: string }
+  | {
+      kind: 'plan';
+      explanation?: string | null;
+      steps: Array<{ step: string; status: 'pending' | 'inProgress' | 'completed' }>;
+    }
+  | {
+      kind: 'item-started';
+      id: string;
+      itemKind: LiveActivityItemKind;
+      label: string;
+      startedAtMs?: number;
+    }
+  | {
+      kind: 'item-completed';
+      id: string;
+      itemKind: LiveActivityItemKind;
+      label: string;
+      status: string;
+      durationMs?: number | null;
+      exitCode?: number | null;
+      output?: string | null;
+      paths?: string[];
+    }
+  | { kind: 'diff'; diff: string }
+  | { kind: 'turn-completed'; failed: boolean };
+
 export type ProviderEvent =
   | { type: 'init'; continuation: string }
   /**
@@ -202,6 +233,7 @@ export type ProviderEvent =
       assessment: Record<string, unknown>;
     }
   | { type: 'file'; path: string }
+  | { type: 'live-activity'; update: LiveActivityUpdate }
   /**
    * Liveness signal. Providers MUST yield this on every underlying SDK
    * event (tool call, thinking, partial message, anything) so the

@@ -26,6 +26,7 @@ import { registerWebhookAdapter } from '../webhook-server.js';
 import { normalizeOptions, type NormalizedOption } from './ask-question.js';
 import type { ChannelAdapter, ChannelDefaults, ChannelSetup, InboundMessage } from './adapter.js';
 import { INSTANCE_KEY_RE } from './channel-registry.js';
+import { handleForwardedDiscordApplicationCommand } from './discord-gateway-interactions.js';
 import { resolveQuestionRender } from './question-render-registry.js';
 
 /** Adapter with optional gateway support (e.g., Discord). */
@@ -36,6 +37,10 @@ interface GatewayAdapter extends Adapter {
     abortSignal?: AbortSignal,
     webhookUrl?: string,
   ): Promise<Response>;
+  handleApplicationCommandInteraction?(
+    interaction: Record<string, unknown>,
+    options?: { waitUntil?: (task: Promise<unknown>) => void },
+  ): void;
 }
 
 /** Reply context extracted from a platform's raw message. */
@@ -1056,9 +1061,11 @@ async function handleForwardedEvent(
     return;
   }
 
-  // Handle interaction events (button clicks) — not handled by adapter's handleForwardedGatewayEvent
+  // Handle interaction events missing from the adapter's forwarded-event dispatcher.
   if (event.type === 'GATEWAY_INTERACTION_CREATE' && event.data) {
     const interaction = event.data;
+    if (await handleForwardedDiscordApplicationCommand(interaction, adapter)) return;
+
     // type 3 = MessageComponent (button/select)
     if (interaction.type === 3) {
       const customId = (interaction.data as Record<string, unknown>)?.custom_id as string;

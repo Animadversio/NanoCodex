@@ -1,0 +1,12 @@
+diff --git a/dist/index.js b/dist/index.js
+index e4f6fe07808ab3c9858fda724c36f7aef5084502..c99384468cfb32a3591b57afc6214eb73bea113f 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -1701,6 +1701,7 @@ var DiscordAdapter = class _DiscordAdapter {
+    */
+   async runGatewayListener(durationMs, abortSignal, webhookUrl) {
+     const client = new Client({
++      presence: { status: "online" },
+       intents: [
+         GatewayIntentBits.Guilds,
+         GatewayIntentBits.GuildMessages,

@@ -38,8 +38,6 @@ export const ONECLI_ACTION = 'onecli_credential';
 type Decision = 'approve' | 'deny';
 type ExpiryReason = 'no response' | 'host restarted';
 
-const onecli = new OneCLI({ url: ONECLI_URL, apiKey: ONECLI_API_KEY });
-
 interface PendingState {
   resolve: (decision: Decision) => void;
   timer: NodeJS.Timeout;
@@ -96,6 +94,7 @@ export function startOneCLIApprovalHandler(deliveryAdapter: ChannelDeliveryAdapt
   // Sweep any rows left over from a previous process.
   sweepStaleApprovals().catch((err) => log.error('OneCLI approval sweep failed', { err }));
 
+  const onecli = new OneCLI({ url: ONECLI_URL, apiKey: ONECLI_API_KEY });
   handle = onecli.configureManualApproval(async (request: ApprovalRequest): Promise<Decision> => {
     try {
       return await handleRequest(request);

@@ -220,7 +220,13 @@ describe('origin metadata (from= attribute)', () => {
       .run(name, name, channelType, platformId);
   }
 
-  function insertWithRouting(id: string, kind: string, content: object, channelType: string | null, platformId: string | null): void {
+  function insertWithRouting(
+    id: string,
+    kind: string,
+    content: object,
+    channelType: string | null,
+    platformId: string | null,
+  ): void {
     getInboundDb()
       .prepare(
         `INSERT INTO messages_in (id, kind, timestamp, status, platform_id, channel_type, content)
@@ -442,6 +448,40 @@ it('does not push accumulated-only follow-ups into an active query', async () =>
   expect(getPendingMessages().map((m) => m.id)).toEqual(['m1']);
 });
 
+it('leaves Codex follow-ups pending for a durable next query', async () => {
+  const pushes: string[] = [];
+  let endCalls = 0;
+
+  async function* events(): AsyncGenerator<ProviderEvent> {
+    yield { type: 'init', continuation: 'sess-1' };
+    insertMessage('m1', 'chat', { sender: 'second-user', text: 'do not supersede the first turn' });
+    await new Promise((resolve) => setTimeout(resolve, 750));
+  }
+
+  await processQuery(
+    {
+      push: (message) => pushes.push(message),
+      end: () => {
+        endCalls++;
+      },
+      events: events(),
+      abort: () => {},
+    },
+    ERR_ROUTING,
+    [],
+    'codex',
+    undefined,
+    'prompt',
+    undefined,
+    false,
+    'next-query',
+  );
+
+  expect(endCalls).toBe(1);
+  expect(pushes).toHaveLength(0);
+  expect(getPendingMessages().map((message) => message.id)).toEqual(['m1']);
+});
+
 it('persists a Guardian review and feeds an authorized override back to the active provider', async () => {
   const pushes: string[] = [];
   const approvals: Record<string, unknown>[] = [];
@@ -548,9 +588,9 @@ const TASK_ROUTING = {
 
 function taskLogRows(): Array<{ text: string }> {
   return (
-    getOutboundDb()
-      .prepare("SELECT content FROM messages_out WHERE kind = 'task_log' ORDER BY seq")
-      .all() as Array<{ content: string }>
+    getOutboundDb().prepare("SELECT content FROM messages_out WHERE kind = 'task_log' ORDER BY seq").all() as Array<{
+      content: string;
+    }>
   ).map((r) => JSON.parse(r.content) as { text: string });
 }
 

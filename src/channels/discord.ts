@@ -60,6 +60,19 @@ export function unwrapForwardedSnapshot(data: Record<string, any>): void {
   }
 }
 
+/**
+ * The Discord adapter creates a public-thread reply whenever the bot is
+ * mentioned. Discord DMs cannot host those guild threads, so the same branch
+ * produces a noisy `Unknown Guild` request before falling back to the DM.
+ * A DM is already unambiguously addressed to the bot; clear only the adapter's
+ * mention hint while preserving the original message text.
+ */
+export function suppressDiscordDmMentionThread(data: Record<string, unknown>): void {
+  if (data.guild_id) return;
+  data.is_mention = false;
+  data.mentions = [];
+}
+
 function unwrapForwards(adapter: ReturnType<typeof createDiscordAdapter>): void {
   const a = adapter as unknown as {
     handleForwardedMessage: (data: Record<string, unknown>, options?: unknown) => Promise<void>;
@@ -67,13 +80,17 @@ function unwrapForwards(adapter: ReturnType<typeof createDiscordAdapter>): void 
   const orig = a.handleForwardedMessage.bind(adapter);
   a.handleForwardedMessage = async (data, options) => {
     unwrapForwardedSnapshot(data);
+    suppressDiscordDmMentionThread(data);
     return orig(data, options);
   };
 }
 
 registerChannelAdapter('discord', {
   factory: () => {
-    const env = readEnvFile(['DISCORD_BOT_TOKEN', 'DISCORD_PUBLIC_KEY', 'DISCORD_APPLICATION_ID']);
+    const env = readEnvFile(
+      ['DISCORD_BOT_TOKEN', 'DISCORD_PUBLIC_KEY', 'DISCORD_APPLICATION_ID'],
+      process.env.NANOCLAW_DISCORD_ENV_FILE,
+    );
     if (!env.DISCORD_BOT_TOKEN) return null;
     const discordAdapter = createDiscordAdapter({
       botToken: env.DISCORD_BOT_TOKEN,

@@ -81,6 +81,11 @@ function normalizeEffort(effort: string | undefined): CodexReasoningEffort | und
 
 export class CodexProvider implements AgentProvider {
   readonly supportsNativeSlashCommands = false;
+  // App-server turn/steer can redirect an in-flight turn and cause a later
+  // participant's message to supersede an earlier one. Keep ordinary mailbox
+  // follow-ups durable and process them as the next turn instead. Internal
+  // retries and Guardian overrides still use AgentQuery.push directly.
+  readonly followUpMode = 'next-query' as const;
   // The app-server keeps history server-side; there is no on-disk transcript,
   // so the provider persists each exchange itself into `conversations/`
   // (see exchange-archive.ts). The poll-loop reports exchanges through this

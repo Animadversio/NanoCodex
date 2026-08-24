@@ -23,8 +23,6 @@ import { log } from '../log.js';
 
 import { registerGatewayProvider, type GatewayContribution } from './gateway-provider-registry.js';
 
-const onecli = new OneCLI({ url: ONECLI_URL, apiKey: ONECLI_API_KEY });
-
 /** Argv → typed contribution. Exported for its tests; the grammar is closed. */
 export function contributionFromArgs(args: readonly string[], groupScope: string): GatewayContribution {
   const env: Record<string, string> = {};
@@ -60,6 +58,7 @@ export function contributionFromArgs(args: readonly string[], groupScope: string
 registerGatewayProvider('onecli', () => ({
   kind: 'onecli',
   async contribute({ key, groupName }) {
+    const onecli = new OneCLI({ url: ONECLI_URL, apiKey: ONECLI_API_KEY });
     // OneCLI agent identifier is always the agent group id — stable across
     // sessions and reversible via getAgentGroup() for approval routing.
     await onecli.ensureAgent({ name: groupName, identifier: key.agentGroupId });

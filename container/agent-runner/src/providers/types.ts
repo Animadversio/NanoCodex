@@ -25,6 +25,17 @@ export interface AgentProvider {
    */
   readonly emitsMidTurnText?: boolean;
 
+  /**
+   * How newly arrived mailbox messages enter an already-active query.
+   *
+   * `push` preserves providers whose streaming API treats follow-ups as
+   * additive input. `next-query` ends the current query after its active turn
+   * and leaves the new mailbox rows pending, so the outer loop can claim and
+   * format them durably as the next turn. Providers whose steering API can
+   * supersede earlier instructions should use `next-query`.
+   */
+  readonly followUpMode?: 'push' | 'next-query';
+
   /** Register shared memory through the provider's native session-start mechanism. */
   registerMemorySessionHook(hook: MemorySessionHookRegistration): void;
 

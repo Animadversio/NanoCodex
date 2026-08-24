@@ -48,8 +48,13 @@ report(
 const login = command('codex', ['login', 'status']);
 report(login.ok, 'Codex login', login.output || 'run `codex login`');
 
-const env = readEnvFile(['DISCORD_BOT_TOKEN']);
-report(Boolean(env.DISCORD_BOT_TOKEN), 'Discord token', env.DISCORD_BOT_TOKEN ? 'configured' : 'missing from .env');
+const discordEnvFile = process.env.NANOCLAW_DISCORD_ENV_FILE;
+const env = readEnvFile(['DISCORD_BOT_TOKEN'], discordEnvFile);
+report(
+  Boolean(env.DISCORD_BOT_TOKEN),
+  'Discord token',
+  env.DISCORD_BOT_TOKEN ? `configured in ${discordEnvFile || '.env'}` : `missing from ${discordEnvFile || '.env'}`,
+);
 
 const rootDependencies = path.join(process.cwd(), 'node_modules');
 const runnerDependencies = path.join(process.cwd(), 'container', 'agent-runner', 'node_modules');

@@ -34,10 +34,17 @@ pnpm install
 cp .env.example .env
 ```
 
-Fill `DISCORD_BOT_TOKEN` in `.env`. `DISCORD_APPLICATION_ID` and `DISCORD_PUBLIC_KEY` are supported but are not required for the gateway connection. Then verify the native environment:
+Fill `DISCORD_BOT_TOKEN` in `.env`. `DISCORD_APPLICATION_ID` and `DISCORD_PUBLIC_KEY` are supported but are not required for the gateway connection. To reuse credentials without copying them, set `NANOCLAW_DISCORD_ENV_FILE` to an absolute path containing those Discord keys; NanoCodex reads that file directly and does not place the token in an agent child's environment. Then verify the native environment:
 
 ```bash
 pnpm native:doctor
+```
+
+For example, to reuse a stopped NanoClawV2 installation's credentials:
+
+```bash
+NANOCLAW_DISCORD_ENV_FILE=/absolute/path/to/nanoclawV2/.env pnpm native:doctor
+NANOCLAW_DISCORD_ENV_FILE=/absolute/path/to/nanoclawV2/.env pnpm dev
 ```
 
 Start NanoCodex in the first terminal:

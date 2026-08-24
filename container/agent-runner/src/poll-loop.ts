@@ -253,6 +253,7 @@ export async function runPollLoop(config: PollLoopConfig): Promise<void> {
         prompt,
         continuation,
         config.provider.emitsMidTurnText === true,
+        config.provider.followUpMode ?? 'push',
       );
       if (result.continuation && result.continuation !== continuation) {
         continuation = result.continuation;
@@ -353,6 +354,7 @@ export async function processQuery(
    * delivery-inert and the final result stays the single delivery door.
    */
   emitsMidTurnText = false,
+  followUpMode: 'push' | 'next-query' = 'push',
 ): Promise<QueryResult> {
   let queryContinuation: string | undefined;
   let done = false;
@@ -407,9 +409,10 @@ export async function processQuery(
   // will kill the container and messages get reset to pending.
   let pollInFlight = false;
   let endedForCommand = false;
+  let endingForFollowUp = false;
   let mailboxFailureStreak = 0;
   const pollHandle = setInterval(() => {
-    if (done || pollInFlight || endedForCommand) return;
+    if (done || pollInFlight || endedForCommand || endingForFollowUp) return;
     pollInFlight = true;
 
     void (async () => {
@@ -475,6 +478,19 @@ export async function processQuery(
 
         // Accumulated context must not engage a warm query by itself.
         if (!newMessages.some((m) => m.trigger === 1)) return;
+
+        // Codex turn/steer is redirective: a rapid follow-up can supersede
+        // work already underway for another participant. End the current
+        // query after its active turn and leave these rows pending. The outer
+        // loop will claim and format the complete pending batch as a distinct,
+        // durable next turn. This also avoids acknowledging input that exists
+        // only in an in-memory provider queue if the runner crashes.
+        if (followUpMode === 'next-query') {
+          log(`Pending follow-up message(s) — ending active query so the next turn can claim them durably`);
+          endingForFollowUp = true;
+          query.end();
+          return;
+        }
 
         const newIds = newMessages.map((m) => m.id);
         markProcessing(newIds);

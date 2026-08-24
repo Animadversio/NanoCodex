@@ -21,6 +21,19 @@ const DISCORD_DEFAULTS: ChannelDefaults = {
   mentions: 'platform',
 };
 
+export type DiscordThreadSpawnPolicy = 'manual' | 'mention';
+
+/**
+ * A mention addresses the bot; it does not imply a new conversation branch.
+ * Keep the adapter's historical behavior available as an explicit opt-in for
+ * installations that still want mention-created public threads.
+ */
+export function resolveDiscordThreadSpawnPolicy(value: string | undefined): DiscordThreadSpawnPolicy {
+  const normalized = value?.trim().toLowerCase() || 'manual';
+  if (normalized === 'manual' || normalized === 'mention') return normalized;
+  throw new Error(`DISCORD_THREAD_SPAWN_POLICY must be "manual" or "mention", got "${value}"`);
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function extractReplyContext(raw: Record<string, any>): ReplyContext | null {
   if (!raw.referenced_message) return null;
@@ -61,9 +74,9 @@ export function unwrapForwardedSnapshot(data: Record<string, any>): void {
 }
 
 /**
- * The Discord adapter creates a public-thread reply whenever the bot is
- * mentioned. Discord DMs cannot host those guild threads, so the same branch
- * produces a noisy `Unknown Guild` request before falling back to the DM.
+ * When mention-created threads are explicitly enabled, Discord DMs still
+ * cannot host those guild threads. Clear the adapter's mention hint in DMs to
+ * avoid a noisy `Unknown Guild` request before falling back to the DM.
  * A DM is already unambiguously addressed to the bot; clear only the adapter's
  * mention hint while preserving the original message text.
  */
@@ -88,14 +101,16 @@ function unwrapForwards(adapter: ReturnType<typeof createDiscordAdapter>): void 
 registerChannelAdapter('discord', {
   factory: () => {
     const env = readEnvFile(
-      ['DISCORD_BOT_TOKEN', 'DISCORD_PUBLIC_KEY', 'DISCORD_APPLICATION_ID'],
+      ['DISCORD_BOT_TOKEN', 'DISCORD_PUBLIC_KEY', 'DISCORD_APPLICATION_ID', 'DISCORD_THREAD_SPAWN_POLICY'],
       process.env.NANOCLAW_DISCORD_ENV_FILE,
     );
     if (!env.DISCORD_BOT_TOKEN) return null;
+    const threadSpawnPolicy = resolveDiscordThreadSpawnPolicy(env.DISCORD_THREAD_SPAWN_POLICY);
     const discordAdapter = createDiscordAdapter({
       botToken: env.DISCORD_BOT_TOKEN,
       publicKey: env.DISCORD_PUBLIC_KEY,
       applicationId: env.DISCORD_APPLICATION_ID,
+      autoCreateThreadsOnMention: threadSpawnPolicy === 'mention',
     });
     unwrapForwards(discordAdapter);
     return createChatSdkBridge({

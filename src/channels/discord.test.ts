@@ -1,6 +1,52 @@
-import { describe, expect, it } from 'vitest';
+import { createDiscordAdapter } from '@chat-adapter/discord';
+import { describe, expect, it, vi } from 'vitest';
 
-import { suppressDiscordDmMentionThread } from './discord.js';
+import { resolveDiscordThreadSpawnPolicy, suppressDiscordDmMentionThread } from './discord.js';
+
+describe('Discord thread spawn policy', () => {
+  it('defaults to manual and keeps mention-created threads as an explicit opt-in', () => {
+    expect(resolveDiscordThreadSpawnPolicy(undefined)).toBe('manual');
+    expect(resolveDiscordThreadSpawnPolicy(' manual ')).toBe('manual');
+    expect(resolveDiscordThreadSpawnPolicy('MENTION')).toBe('mention');
+    expect(() => resolveDiscordThreadSpawnPolicy('always')).toThrow(/must be "manual" or "mention"/);
+  });
+
+  it('keeps a top-level guild mention on the channel when auto creation is disabled', async () => {
+    const adapter = createDiscordAdapter({
+      botToken: 'token',
+      publicKey: 'a'.repeat(64),
+      applicationId: 'bot-id',
+      autoCreateThreadsOnMention: false,
+    });
+    const createThread = vi.fn();
+    const handleIncomingMessage = vi.fn();
+    const internals = adapter as unknown as {
+      chat: { handleIncomingMessage: typeof handleIncomingMessage };
+      createDiscordThread: typeof createThread;
+      handleForwardedMessage: (data: Record<string, unknown>) => Promise<void>;
+    };
+    internals.chat = { handleIncomingMessage };
+    internals.createDiscordThread = createThread;
+
+    await internals.handleForwardedMessage({
+      id: 'message-id',
+      guild_id: 'guild-id',
+      channel_id: 'channel-id',
+      content: '<@bot-id> hello',
+      timestamp: '2026-08-24T00:00:00.000Z',
+      author: { id: 'user-id', username: 'user', bot: false },
+      attachments: [],
+      mentions: [{ id: 'bot-id' }],
+      mention_roles: [],
+      is_mention: true,
+    });
+
+    expect(createThread).not.toHaveBeenCalled();
+    expect(handleIncomingMessage).toHaveBeenCalledOnce();
+    expect(handleIncomingMessage.mock.calls[0]?.[1]).toBe('discord:guild-id:channel-id');
+    expect(handleIncomingMessage.mock.calls[0]?.[2]).toMatchObject({ isMention: true });
+  });
+});
 
 describe('Discord DM mention handling', () => {
   it('keeps DM text but clears the adapter hint that creates an invalid guild thread', () => {
@@ -19,7 +65,7 @@ describe('Discord DM mention handling', () => {
     });
   });
 
-  it('leaves guild mention metadata intact so channel mentions can create threads', () => {
+  it('leaves guild mention metadata intact so mentions still address the bot', () => {
     const data = {
       guild_id: 'guild-id',
       content: '<@bot-id> hello',

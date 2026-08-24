@@ -1,8 +1,51 @@
+diff --git a/dist/index.d.ts b/dist/index.d.ts
+--- a/dist/index.d.ts
++++ b/dist/index.d.ts
+@@ -57,5 +57,7 @@ interface DiscordAdapterConfig {
+     /** Role IDs that should trigger mention handlers (in addition to direct user mentions). Defaults to DISCORD_MENTION_ROLE_IDS env var (comma-separated). */
+     mentionRoleIds?: string[];
++    /** Whether a top-level mention automatically creates a public Discord thread. Defaults to true. */
++    autoCreateThreadsOnMention?: boolean;
+     /** Discord application public key for webhook signature verification. Defaults to DISCORD_PUBLIC_KEY env var. */
+     publicKey?: string;
+     /** Override bot username (optional) */
+@@ -363,6 +365,7 @@ declare class DiscordAdapter implements Adapter<DiscordThreadId, unknown> {
+     protected readonly publicKey: string;
+     protected readonly applicationId: string;
+     protected readonly mentionRoleIds: string[];
++    protected readonly autoCreateThreadsOnMention: boolean;
+     protected chat: ChatInstance | null;
+     protected readonly logger: Logger;
+     protected readonly formatConverter: DiscordFormatConverter;
 diff --git a/dist/index.js b/dist/index.js
-index e4f6fe07808ab3c9858fda724c36f7aef5084502..c99384468cfb32a3591b57afc6214eb73bea113f 100644
 --- a/dist/index.js
 +++ b/dist/index.js
-@@ -1701,6 +1701,7 @@ var DiscordAdapter = class _DiscordAdapter {
+@@ -398,6 +398,7 @@ var DiscordAdapter = class _DiscordAdapter {
+   publicKey;
+   applicationId;
+   mentionRoleIds;
++  autoCreateThreadsOnMention;
+   chat = null;
+   logger;
+   formatConverter = new DiscordFormatConverter();
+@@ -432,6 +433,7 @@ var DiscordAdapter = class _DiscordAdapter {
+     this.publicKey = publicKey.trim().toLowerCase();
+     this.applicationId = applicationId;
+     this.mentionRoleIds = config.mentionRoleIds ?? (process.env.DISCORD_MENTION_ROLE_IDS ? process.env.DISCORD_MENTION_ROLE_IDS.split(",").map((id) => id.trim()) : []);
++    this.autoCreateThreadsOnMention = config.autoCreateThreadsOnMention ?? true;
+     this.botUserId = applicationId;
+     this.logger = config.logger ?? new ConsoleLogger("info").child("discord");
+     this.userName = config.userName ?? "bot";
+@@ -928,7 +930,7 @@ var DiscordAdapter = class _DiscordAdapter {
+       (roleId) => this.mentionRoleIds.includes(roleId)
+     );
+     const isMentioned = isUserMentioned || isRoleMentioned;
+-    if (!discordThreadId && isMentioned) {
++    if (!discordThreadId && isMentioned && this.autoCreateThreadsOnMention) {
+       try {
+         const newThread = await this.createDiscordThread(channelId, data.id);
+         discordThreadId = newThread.id;
+@@ -1701,6 +1703,7 @@ var DiscordAdapter = class _DiscordAdapter {
     */
    async runGatewayListener(durationMs, abortSignal, webhookUrl) {
      const client = new Client({
@@ -10,3 +53,12 @@ index e4f6fe07808ab3c9858fda724c36f7aef5084502..c99384468cfb32a3591b57afc6214eb7
        intents: [
          GatewayIntentBits.Guilds,
          GatewayIntentBits.GuildMessages,
+@@ -1936,7 +1939,7 @@ var DiscordAdapter = class _DiscordAdapter {
+       discordThreadId = channelId;
+       parentChannelId = message.channel.parentId;
+     }
+-    if (!discordThreadId && isMentioned) {
++    if (!discordThreadId && isMentioned && this.autoCreateThreadsOnMention) {
+       try {
+         const newThread = await this.createDiscordThread(channelId, message.id);
+         discordThreadId = newThread.id;

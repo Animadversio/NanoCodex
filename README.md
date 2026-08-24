@@ -36,6 +36,8 @@ cp .env.example .env
 
 Fill `DISCORD_BOT_TOKEN` in `.env`. `DISCORD_APPLICATION_ID` and `DISCORD_PUBLIC_KEY` are supported but are not required for the gateway connection. To reuse credentials without copying them, set `NANOCLAW_DISCORD_ENV_FILE` to an absolute path containing those Discord keys; NanoCodex reads that file directly and does not place the token in an agent child's environment. Then verify the native environment:
 
+Discord thread creation is manual by default: a top-level `@mention` stays in the channel's shared context, while a Discord thread created by a person becomes a context branch when the bot first handles a message there. Set `DISCORD_THREAD_SPAWN_POLICY=mention` in the Discord environment file only if you want the older mention-created-thread behavior.
+
 ```bash
 pnpm native:doctor
 ```

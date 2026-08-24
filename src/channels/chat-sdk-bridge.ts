@@ -370,7 +370,13 @@ function resolveSelectedOption(
   eventValue: string | undefined,
   tail: string | undefined,
 ): string {
-  const candidate = eventValue ?? tail ?? '';
+  const rawCandidate = eventValue ?? tail ?? '';
+  // Discord's adapter encodes a button as `<actionId>\n<value>`. Gateway
+  // interactions bypass the adapter's decoder below, so the parsed action-id
+  // tail can be `0\n0` for our compact index buttons. Collapse only an exact
+  // duplicated numeric pair; literal legacy option values remain untouched.
+  const duplicatedIndex = rawCandidate.match(/^(\d+)\r?\n\1$/);
+  const candidate = duplicatedIndex?.[1] ?? rawCandidate;
   if (render && /^\d+$/.test(candidate)) {
     const idx = Number(candidate);
     if (render.options[idx]) return render.options[idx].value;

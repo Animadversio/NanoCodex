@@ -173,4 +173,22 @@ describe('chat-sdk-bridge approval-card terminal state', () => {
     expect(message.markdown).toContain('Approved safely by reviewer');
     expect(actions).toEqual(['module-compact-question:approve-real-value:U4']);
   });
+
+  it('resolves compact Discord gateway values appended to the action id', async () => {
+    registerQuestionRenderResolver((questionId) => {
+      if (questionId !== 'discord-gateway-question') return undefined;
+      return {
+        title: 'Channel registration',
+        options: [{ label: 'Connect', selectedLabel: 'Connected', value: 'connect:agent-1' }],
+      };
+    });
+
+    const { actions } = await fireAction(
+      { userId: 'U5', userName: 'owner' },
+      '0\n0',
+      'ncq:discord-gateway-question:0\n0',
+    );
+
+    expect(actions).toEqual(['discord-gateway-question:connect:agent-1:U5']);
+  });
 });

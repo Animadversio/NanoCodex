@@ -12,14 +12,14 @@ import { registerChannelAdapter } from './channel-registry.js';
 import { handleNanoCodexDiscordCommand, registerNanoCodexDiscordCommand } from './discord-context-controls.js';
 
 /**
- * Dedicated bot app on a threaded platform. group threads:true matches the
- * declared supportsThreads (the skill-installed install-style knob) so
- * mention-sticky engagement stays bounded per-thread. dm.threads:false —
- * DM replies land top-level, one session per DM.
+ * Dedicated bot app on a threaded platform. Group conversations require a
+ * fresh platform mention for every response by default; always-on or sticky
+ * engagement must be an explicit per-wiring choice. dm.threads:false — DM
+ * replies land top-level, one session per DM.
  */
 const DISCORD_DEFAULTS: ChannelDefaults = {
   dm: { engageMode: 'pattern', engagePattern: '.', threads: false, unknownSenderPolicy: 'request_approval' },
-  group: { engageMode: 'mention-sticky', threads: true, unknownSenderPolicy: 'request_approval' },
+  group: { engageMode: 'mention', threads: true, unknownSenderPolicy: 'request_approval' },
   mentions: 'platform',
 };
 

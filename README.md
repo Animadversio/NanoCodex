@@ -46,7 +46,12 @@ NanoCodex registers a `/nanocodex` Discord command at startup. Its host-owned co
 - `/nanocodex where` inspects the context and runtime bound to the current channel or thread.
 - `/nanocodex tree` shows the channel trunk and its Discord-thread branches.
 - `/nanocodex lineage` shows the current context's ancestry from root to branch.
+- `/nanocodex status` shows the current context, Codex thread, runtime, speed, thinking effort, and recent activity.
 - `/nanocodex history [limit]` shows the latest 1-20 routed messages for the current context.
+- `/nanocodex speed <normal|fast>` selects the Codex service tier for this context.
+- `/nanocodex thinking <default|low|medium|high|xhigh>` selects the reasoning effort for this context.
+
+Status and history are available to authorized agent members. Persistent speed and thinking changes require an owner or admin role. Settings belong to the context node: the channel trunk and each Discord thread branch can use different values. A new branch snapshots the trunk's current settings, then may diverge independently. Changing a setting preserves the Codex thread and refreshes the native runner after any active turn finishes.
 
 ```bash
 pnpm native:doctor

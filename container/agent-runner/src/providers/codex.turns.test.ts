@@ -221,6 +221,30 @@ describe('CodexProvider active turns', () => {
     expect(events.filter((event) => event.type === 'result')).toEqual([{ type: 'result', text: 'final answer' }]);
   });
 
+  it('applies context reasoning and fast-tier overrides ahead of group defaults', async () => {
+    const fake = createFakeCodexRuntime();
+    const provider = createCodexProvider(
+      {
+        effort: 'medium',
+        env: {
+          NANOCLAW_CODEX_REASONING_EFFORT: 'high',
+          NANOCLAW_CODEX_SERVICE_TIER: 'fast',
+        },
+      },
+      fake.runtime,
+    );
+    const query = provider.query({ prompt: 'work', cwd: '/workspace/agent' });
+    const collect = collectEvents(query.events, []);
+
+    await waitFor(() => fake.startCalls.length === 1);
+    query.end();
+    fake.completeTurn('done');
+    await collect;
+
+    expect(fake.configCalls).toEqual([{ model: undefined, effort: 'high', serviceTier: 'fast' }]);
+    expect(fake.startCalls[0].effort).toBe('high');
+  });
+
   it('maps Codex plans, commentary, tools, diffs, and completion into compact activity events', async () => {
     const fake = createFakeCodexRuntime();
     const provider = createCodexProvider({}, fake.runtime);
@@ -411,6 +435,7 @@ function createFakeCodexRuntime(opts: { rejectSteer?: boolean } = {}) {
   const interruptCalls: Array<{ threadId: string; turnId: string }> = [];
   const approvalCalls: Array<{ threadId: string; event: Record<string, unknown> }> = [];
   const threadCalls: Array<{ threadId: string | undefined; params: ThreadParams }> = [];
+  const configCalls: Array<{ model?: string; effort?: string; serviceTier?: string }> = [];
   let killed = false;
 
   const notify = (method: string, params?: Record<string, unknown>): void => {
@@ -419,7 +444,9 @@ function createFakeCodexRuntime(opts: { rejectSteer?: boolean } = {}) {
   };
 
   const runtime: CodexRuntimeDeps = {
-    writeCodexConfigToml: () => {},
+    writeCodexConfigToml: (_servers, _hook, config) => {
+      configCalls.push(config);
+    },
     spawnCodexAppServer: () => server,
     attachCodexAutoApproval: () => {},
     initializeCodexAppServer: async () => {},
@@ -455,6 +482,7 @@ function createFakeCodexRuntime(opts: { rejectSteer?: boolean } = {}) {
     interruptCalls,
     approvalCalls,
     threadCalls,
+    configCalls,
     notify,
     get killed() {
       return killed;

@@ -16,6 +16,7 @@ import {
   getSurfaceBindingsByAgentGroup,
   initTestDb,
   runMigrations,
+  setContextRuntimePreferences,
 } from './db/index.js';
 import { outboundDbPath } from './mailbox/sqlite/paths.js';
 import { resolveSession } from './session-manager.js';
@@ -84,6 +85,24 @@ describe('context tree routing', () => {
     });
     await expect(contextRuntimeEnvironment(trunk.session)).resolves.toMatchObject({
       NANOCLAW_CODEX_CONTEXT_THREAD_ID: 'codex-trunk-thread',
+    });
+  });
+
+  it('snapshots trunk runtime preferences into a new branch environment', async () => {
+    const trunk = await resolveSession('ag-1', 'mg-1', PLATFORM_ID, 'per-thread');
+    await setContextRuntimePreferences(trunk.session.context_node_id!, {
+      serviceTier: 'fast',
+      reasoningEffort: 'high',
+    });
+
+    const branch = await resolveSession('ag-1', 'mg-1', `${PLATFORM_ID}:thread-preferences`, 'per-thread');
+    await expect(contextRuntimeEnvironment(branch.session)).resolves.toMatchObject({
+      NANOCLAW_CODEX_SERVICE_TIER: 'fast',
+      NANOCLAW_CODEX_REASONING_EFFORT: 'high',
+    });
+    await expect(getContextNode(branch.session.context_node_id!)).resolves.toMatchObject({
+      service_tier: 'fast',
+      reasoning_effort: 'high',
     });
   });
 });

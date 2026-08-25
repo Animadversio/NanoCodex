@@ -11,6 +11,7 @@ export {
   resolveSurfaceContext,
   createStandaloneContext,
   setContextCodexThreadId,
+  setContextRuntimePreferences,
 } from './context-nodes.js';
 export {
   createAgentGroup,

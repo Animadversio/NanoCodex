@@ -1,14 +1,21 @@
 import { getAgentGroup } from '../db/agent-groups.js';
+import { getContainerConfig } from '../db/container-configs.js';
 import {
   findSurfaceBinding,
   getContextNode,
   getContextNodesByAgentGroup,
   getSurfaceBindingsByAgentGroup,
+  resolveSurfaceContext,
+  setContextRuntimePreferences,
 } from '../db/context-nodes.js';
 import { getMessagingGroupAgents, getMessagingGroupByPlatform } from '../db/messaging-groups.js';
 import { findSessionByContext } from '../db/sessions.js';
+import { isContainerRunning, killContainer } from '../container-runner.js';
+import { log } from '../log.js';
 import { sessionHistory, type HistoryRow } from '../modules/cross-session-context/index.js';
 import { canAccessAgentGroup } from '../modules/permissions/access.js';
+import { hasAdminPrivilege } from '../modules/permissions/db/user-roles.js';
+import { withExistingMailboxSession } from '../session-manager.js';
 import type { ContextNode, MessagingGroupAgent } from '../types.js';
 import type { ChatSdkSlashCommandEvent } from './chat-sdk-bridge.js';
 
@@ -16,6 +23,9 @@ const DISCORD_API_BASE = 'https://discord.com/api/v10';
 const RESPONSE_LIMIT = 1900;
 const HISTORY_DEFAULT_LIMIT = 10;
 const HISTORY_MAX_LIMIT = 20;
+const RUNTIME_REFRESH_POLL_MS = 1000;
+const RUNTIME_REFRESH_TIMEOUT_MS = 15 * 60 * 1000;
+const scheduledRuntimeRefreshes = new Set<string>();
 
 export const NANOCODEX_DISCORD_COMMAND = {
   name: 'nanocodex',
@@ -25,6 +35,44 @@ export const NANOCODEX_DISCORD_COMMAND = {
     { type: 1, name: 'where', description: 'Show the context bound to this channel or thread' },
     { type: 1, name: 'tree', description: 'Show the context tree for this Discord channel' },
     { type: 1, name: 'lineage', description: 'Show the ancestry of the current context' },
+    { type: 1, name: 'status', description: 'Show context, runtime, speed, thinking, and recent activity' },
+    {
+      type: 1,
+      name: 'speed',
+      description: 'Select the Codex service speed for this context (owner/admin)',
+      options: [
+        {
+          type: 3,
+          name: 'mode',
+          description: 'Normal uses the default service tier; Fast requests priority service',
+          required: true,
+          choices: [
+            { name: 'Normal', value: 'normal' },
+            { name: 'Fast', value: 'fast' },
+          ],
+        },
+      ],
+    },
+    {
+      type: 1,
+      name: 'thinking',
+      description: 'Select reasoning depth for this context (owner/admin)',
+      options: [
+        {
+          type: 3,
+          name: 'effort',
+          description: 'Default inherits the agent setting',
+          required: true,
+          choices: [
+            { name: 'Default', value: 'default' },
+            { name: 'Low', value: 'low' },
+            { name: 'Medium', value: 'medium' },
+            { name: 'High', value: 'high' },
+            { name: 'Extra high', value: 'xhigh' },
+          ],
+        },
+      ],
+    },
     {
       type: 1,
       name: 'history',
@@ -88,10 +136,75 @@ function renderHelp(): string {
     '`/nanocodex where` — inspect this Discord surface and runtime',
     '`/nanocodex tree` — show the channel trunk and thread branches',
     '`/nanocodex lineage` — show this context from root to current node',
+    '`/nanocodex status` — show runtime, context, speed, thinking, and recent activity',
     '`/nanocodex history [limit]` — show the latest 1-20 context messages',
+    '`/nanocodex speed <normal|fast>` — set this context service tier (owner/admin)',
+    '`/nanocodex thinking <default|low|medium|high|xhigh>` — set reasoning depth (owner/admin)',
     '',
     'Create a Discord thread manually to deliberately fork a branch from the channel trunk.',
   ].join('\n');
+}
+
+async function controllableWirings(
+  event: ChatSdkSlashCommandEvent,
+  accessible: { messagingGroupId: string; wirings: MessagingGroupAgent[] },
+): Promise<MessagingGroupAgent[] | string> {
+  const userId = namespacedDiscordUserId(event.userId);
+  const controllable: MessagingGroupAgent[] = [];
+  for (const wiring of accessible.wirings) {
+    if (await hasAdminPrivilege(userId, wiring.agent_group_id)) controllable.push(wiring);
+  }
+  if (controllable.length === 0) {
+    return 'Permission denied: changing context runtime settings requires an owner or admin role.';
+  }
+  return controllable;
+}
+
+function scheduleRuntimeRefresh(session: Awaited<ReturnType<typeof findSessionByContext>>): string {
+  if (!session || !isContainerRunning(session.id)) return 'applies on the next runtime start';
+  if (scheduledRuntimeRefreshes.has(session.id)) return 'runtime refresh already scheduled';
+
+  const startedAt = Date.now();
+  let checking = false;
+  scheduledRuntimeRefreshes.add(session.id);
+  const timer = setInterval(() => {
+    if (checking) return;
+    checking = true;
+    void (async () => {
+      if (!isContainerRunning(session.id)) {
+        clearInterval(timer);
+        scheduledRuntimeRefreshes.delete(session.id);
+        return;
+      }
+      const processing =
+        (await withExistingMailboxSession(session.agent_group_id, session.id, (mailbox) =>
+          mailbox.getProcessingClaims(),
+        )) ?? [];
+      if (processing.length === 0) {
+        clearInterval(timer);
+        scheduledRuntimeRefreshes.delete(session.id);
+        killContainer(session.id, 'context-runtime-preferences-changed');
+        return;
+      }
+      if (Date.now() - startedAt >= RUNTIME_REFRESH_TIMEOUT_MS) {
+        clearInterval(timer);
+        scheduledRuntimeRefreshes.delete(session.id);
+        log.warn('Context runtime preference refresh timed out while a turn remained active', {
+          sessionId: session.id,
+        });
+      }
+    })()
+      .catch((err) => {
+        clearInterval(timer);
+        scheduledRuntimeRefreshes.delete(session.id);
+        log.warn('Failed to refresh context runtime preferences', { sessionId: session.id, err });
+      })
+      .finally(() => {
+        checking = false;
+      });
+  }, RUNTIME_REFRESH_POLL_MS);
+  timer.unref();
+  return 'runtime will refresh after the active turn';
 }
 
 async function accessibleWirings(
@@ -137,6 +250,94 @@ async function renderWhere(event: ChatSdkSlashCommandEvent): Promise<string> {
     );
   }
   return capResponse(lines);
+}
+
+async function renderStatus(event: ChatSdkSlashCommandEvent): Promise<string> {
+  const accessible = await accessibleWirings(event);
+  if (typeof accessible === 'string') return accessible;
+
+  const threadKey = event.threadId === event.platformId ? '' : event.threadId;
+  const lines = ['**NanoCodex context status**', `Surface: ${threadKey ? 'Discord thread' : 'channel trunk'}`];
+  for (const wiring of accessible.wirings) {
+    const agent = await getAgentGroup(wiring.agent_group_id);
+    const binding = await findSurfaceBinding(wiring.agent_group_id, accessible.messagingGroupId, threadKey);
+    lines.push('', `**${agent?.name ?? wiring.agent_group_id}**`);
+    if (!binding) {
+      lines.push('Context: not created yet', 'Speed: normal', 'Thinking: agent default');
+      continue;
+    }
+    const context = await getContextNode(binding.context_node_id);
+    if (!context) {
+      lines.push(`Context: invalid binding ${compactId(binding.context_node_id)}`);
+      continue;
+    }
+    const runtime = await findSessionByContext(context.id);
+    const groupConfig = await getContainerConfig(wiring.agent_group_id);
+    const history = runtime
+      ? await sessionHistory({ id: runtime.id, limit: HISTORY_MAX_LIMIT }, { caller: 'host' })
+      : [];
+    const effectiveEffort = context.reasoning_effort ?? groupConfig?.effort ?? 'Codex default';
+    lines.push(
+      `Context: ${context.kind} · ${compactId(context.id)}`,
+      `Codex thread: ${compactId(context.codex_thread_id)}`,
+      `Speed: ${context.service_tier === 'fast' ? 'fast' : 'normal'}`,
+      `Thinking: ${effectiveEffort}${context.reasoning_effort ? ' · context override' : ''}`,
+      `Runtime: ${runtime ? `${runtime.container_status} · ${compactId(runtime.id)}` : 'not running'}`,
+      `Last active: ${runtime?.last_active?.replace('T', ' ').slice(0, 19) ?? 'never'}`,
+      `Recent history: ${history.length}${history.length === HISTORY_MAX_LIMIT ? '+' : ''} messages`,
+    );
+  }
+  return capResponse(lines);
+}
+
+async function updateContextPreference(
+  event: ChatSdkSlashCommandEvent,
+  preference: { serviceTier?: string | null; reasoningEffort?: string | null },
+  label: string,
+): Promise<string> {
+  const accessible = await accessibleWirings(event);
+  if (typeof accessible === 'string') return accessible;
+  const controllable = await controllableWirings(event, accessible);
+  if (typeof controllable === 'string') return controllable;
+
+  const lines = [`**NanoCodex context setting updated**`, label];
+  for (const wiring of controllable) {
+    if (wiring.session_mode === 'agent-shared') {
+      lines.push(`${wiring.agent_group_id}: unavailable for agent-shared routing`);
+      continue;
+    }
+    const agent = await getAgentGroup(wiring.agent_group_id);
+    const { context } = await resolveSurfaceContext({
+      agentGroupId: wiring.agent_group_id,
+      messagingGroupId: accessible.messagingGroupId,
+      platformId: event.platformId,
+      threadId: event.threadId,
+      sessionMode: wiring.session_mode === 'per-thread' ? 'per-thread' : 'shared',
+    });
+    await setContextRuntimePreferences(context.id, preference);
+    const runtime = await findSessionByContext(context.id);
+    lines.push(`${agent?.name ?? wiring.agent_group_id}: ${context.kind} · ${scheduleRuntimeRefresh(runtime)}`);
+  }
+  lines.push('The Codex thread and conversation history are preserved.');
+  return capResponse(lines);
+}
+
+async function updateSpeed(event: ChatSdkSlashCommandEvent): Promise<string> {
+  const mode = event.text.trim().toLowerCase();
+  if (mode !== 'normal' && mode !== 'fast') return 'Speed must be `normal` or `fast`.';
+  return updateContextPreference(event, { serviceTier: mode === 'fast' ? 'fast' : null }, `Speed: **${mode}**`);
+}
+
+async function updateThinking(event: ChatSdkSlashCommandEvent): Promise<string> {
+  const effort = event.text.trim().toLowerCase();
+  if (!['default', 'low', 'medium', 'high', 'xhigh'].includes(effort)) {
+    return 'Thinking must be `default`, `low`, `medium`, `high`, or `xhigh`.';
+  }
+  return updateContextPreference(
+    event,
+    { reasoningEffort: effort === 'default' ? null : effort },
+    `Thinking: **${effort}**`,
+  );
 }
 
 function contextLine(context: ContextNode, label: string, currentContextId: string | null): string {
@@ -257,7 +458,10 @@ export async function handleNanoCodexDiscordCommand(event: ChatSdkSlashCommandEv
   if (event.command === '/nanocodex where') return renderWhere(event);
   if (event.command === '/nanocodex tree') return renderTree(event);
   if (event.command === '/nanocodex lineage') return renderLineage(event);
+  if (event.command === '/nanocodex status') return renderStatus(event);
   if (event.command === '/nanocodex history') return renderHistory(event);
+  if (event.command === '/nanocodex speed') return updateSpeed(event);
+  if (event.command === '/nanocodex thinking') return updateThinking(event);
   if (event.command.startsWith('/nanocodex')) return renderHelp();
   return null;
 }

@@ -499,7 +499,7 @@ export function attachCodexAutoApproval(server: AppServer): void {
 export function writeCodexConfigToml(
   servers: Record<string, McpServerConfig>,
   memorySessionHook: CodexMemorySessionHook,
-  opts: { model?: string; effort?: string } = {},
+  opts: { model?: string; effort?: string; serviceTier?: string } = {},
 ): void {
   const codexConfigDir = process.env.CODEX_HOME || path.join(process.env.HOME || '/home/node', '.codex');
   fs.mkdirSync(codexConfigDir, { recursive: true });
@@ -515,6 +515,7 @@ export function writeCodexConfigToml(
   ];
   if (opts.model) lines.push(`model = ${tomlBasicString(opts.model)}`);
   if (opts.effort) lines.push(`model_reasoning_effort = ${tomlBasicString(opts.effort)}`);
+  if (opts.serviceTier) lines.push(`service_tier = ${tomlBasicString(opts.serviceTier)}`);
   lines.push('');
 
   // NanoClaw owns persistent memory across providers. Keep Codex's native

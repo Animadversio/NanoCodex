@@ -146,6 +146,11 @@ Use these host-owned controls to inspect routing without consuming a model turn:
 - `/nanocodex tree`
 - `/nanocodex lineage`
 - `/nanocodex history`
+- `/nanocodex status`
+- `/nanocodex speed` (`normal` or `fast`; owner/admin)
+- `/nanocodex thinking` (`default`, `low`, `medium`, `high`, or `xhigh`; owner/admin)
+
+Speed and thinking are stored per context. A server channel and its manually created thread branches can therefore use different latency/depth tradeoffs without losing their Codex conversation history.
 
 ## Updating an installed device
 

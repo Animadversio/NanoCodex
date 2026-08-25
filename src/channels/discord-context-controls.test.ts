@@ -11,12 +11,15 @@ import {
   createAgentGroup,
   createMessagingGroup,
   createMessagingGroupAgent,
+  findSurfaceBinding,
+  getContextNode,
   initTestDb,
   runMigrations,
   setContextCodexThreadId,
 } from '../db/index.js';
 import { addMember } from '../modules/permissions/db/agent-group-members.js';
 import { createUser } from '../modules/permissions/db/users.js';
+import { grantRole } from '../modules/permissions/db/user-roles.js';
 import { resolveSession, writeOutboundDirect, writeSessionMessage } from '../session-manager.js';
 import type { ChatSdkSlashCommandEvent } from './chat-sdk-bridge.js';
 import {
@@ -78,6 +81,13 @@ beforeEach(async () => {
   });
   await createUser({ id: 'discord:user-id', kind: 'discord', display_name: 'User', created_at: createdAt });
   await addMember({ user_id: 'discord:user-id', agent_group_id: 'ag-1', added_by: null, added_at: createdAt });
+  await grantRole({
+    user_id: 'discord:user-id',
+    role: 'admin',
+    agent_group_id: 'ag-1',
+    granted_by: null,
+    granted_at: createdAt,
+  });
 });
 
 afterEach(async () => {
@@ -139,7 +149,52 @@ describe('NanoCodex Discord context controls', () => {
   it('provides discoverable command help', async () => {
     const help = await handleNanoCodexDiscordCommand(event('/nanocodex help'));
     expect(help).toContain('/nanocodex history [limit]');
+    expect(help).toContain('/nanocodex speed <normal|fast>');
+    expect(help).toContain('/nanocodex thinking <default|low|medium|high|xhigh>');
     expect(help).toContain('Create a Discord thread manually');
+  });
+
+  it('stores independent speed and thinking controls on the current context', async () => {
+    await expect(
+      handleNanoCodexDiscordCommand(event('/nanocodex speed', PLATFORM_ID, 'user-id', 'fast')),
+    ).resolves.toContain('Speed: **fast**');
+    await expect(
+      handleNanoCodexDiscordCommand(event('/nanocodex thinking', PLATFORM_ID, 'user-id', 'high')),
+    ).resolves.toContain('Thinking: **high**');
+
+    const trunkBinding = await findSurfaceBinding('ag-1', 'mg-1', '');
+    await expect(getContextNode(trunkBinding!.context_node_id)).resolves.toMatchObject({
+      kind: 'trunk',
+      service_tier: 'fast',
+      reasoning_effort: 'high',
+    });
+
+    const threadId = `${PLATFORM_ID}:thread-settings`;
+    await handleNanoCodexDiscordCommand(event('/nanocodex speed', threadId, 'user-id', 'normal'));
+    const branchBinding = await findSurfaceBinding('ag-1', 'mg-1', threadId);
+    await expect(getContextNode(branchBinding!.context_node_id)).resolves.toMatchObject({
+      kind: 'branch',
+      service_tier: null,
+      reasoning_effort: 'high',
+      parent_context_id: trunkBinding!.context_node_id,
+    });
+    await expect(getContextNode(trunkBinding!.context_node_id)).resolves.toMatchObject({ service_tier: 'fast' });
+
+    const status = await handleNanoCodexDiscordCommand(event('/nanocodex status', threadId));
+    expect(status).toContain('Surface: Discord thread');
+    expect(status).toContain('Speed: normal');
+    expect(status).toContain('Thinking: high · context override');
+    expect(status).toContain('Recent history: 0 messages');
+  });
+
+  it('requires owner or admin authority for persistent runtime controls', async () => {
+    const createdAt = new Date().toISOString();
+    await createUser({ id: 'discord:member', kind: 'discord', display_name: 'Member', created_at: createdAt });
+    await addMember({ user_id: 'discord:member', agent_group_id: 'ag-1', added_by: null, added_at: createdAt });
+
+    await expect(
+      handleNanoCodexDiscordCommand(event('/nanocodex speed', PLATFORM_ID, 'member', 'fast')),
+    ).resolves.toMatch(/requires an owner or admin role/);
   });
 
   it('does not expose context metadata to a non-member', async () => {

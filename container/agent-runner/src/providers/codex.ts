@@ -207,6 +207,7 @@ export class CodexProvider implements AgentProvider {
   private readonly mcpServers: Record<string, McpServerConfig>;
   private readonly model?: string;
   private readonly effort?: CodexReasoningEffort;
+  private readonly serviceTier?: 'fast';
   private readonly forkFromThreadId?: string;
   private readonly forkFromTurnId?: string;
   private readonly contextThreadId?: string;
@@ -217,7 +218,10 @@ export class CodexProvider implements AgentProvider {
     this.mcpServers = options.mcpServers ?? {};
     this.model = options.model;
     this.runtime = runtime;
-    this.effort = normalizeEffort(options.effort);
+    this.effort = normalizeEffort(options.env?.NANOCLAW_CODEX_REASONING_EFFORT ?? options.effort);
+    const serviceTier = options.env?.NANOCLAW_CODEX_SERVICE_TIER?.trim().toLowerCase();
+    if (serviceTier && serviceTier !== 'fast') throw new Error(`Unsupported Codex service tier: ${serviceTier}`);
+    this.serviceTier = serviceTier === 'fast' ? 'fast' : undefined;
     this.forkFromThreadId = options.env?.NANOCLAW_CODEX_FORK_THREAD_ID?.trim() || undefined;
     this.forkFromTurnId = options.env?.NANOCLAW_CODEX_FORK_TURN_ID?.trim() || undefined;
     this.contextThreadId = options.env?.NANOCLAW_CODEX_CONTEXT_THREAD_ID?.trim() || undefined;
@@ -269,6 +273,7 @@ export class CodexProvider implements AgentProvider {
       self.runtime.writeCodexConfigToml(self.mcpServers, memorySessionHook, {
         model: self.model,
         effort: self.effort,
+        serviceTier: self.serviceTier,
       });
       const server = self.runtime.spawnCodexAppServer();
       activeServer = server;

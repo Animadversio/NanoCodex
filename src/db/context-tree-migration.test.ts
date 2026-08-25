@@ -14,7 +14,7 @@ describe('context-tree migration', () => {
     const db = await initTestDb();
     await runMigrations(
       db,
-      migrations.filter((migration) => migration.name !== 'context-tree'),
+      migrations.filter((migration) => !['context-tree', 'context-runtime-preferences'].includes(migration.name)),
     );
     const now = new Date().toISOString();
     await createAgentGroup({

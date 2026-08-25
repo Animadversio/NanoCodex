@@ -70,6 +70,8 @@ async function createNodeAndBinding(input: {
   threadKey: string;
   kind: ContextNodeKind;
   parentContextId: string | null;
+  serviceTier: string | null;
+  reasoningEffort: string | null;
 }): Promise<ContextNode> {
   const now = new Date().toISOString();
   const node: ContextNode = {
@@ -79,6 +81,8 @@ async function createNodeAndBinding(input: {
     parent_context_id: input.parentContextId,
     forked_from_turn_id: null,
     codex_thread_id: null,
+    service_tier: input.serviceTier,
+    reasoning_effort: input.reasoningEffort,
     status: 'active',
     created_at: now,
     updated_at: now,
@@ -97,8 +101,10 @@ async function createNodeAndBinding(input: {
     await getDb().transaction(async () => {
       await getDb().run(
         `INSERT INTO context_nodes
-           (id, agent_group_id, kind, parent_context_id, forked_from_turn_id, codex_thread_id, status, created_at, updated_at)
-         VALUES (@id, @agent_group_id, @kind, @parent_context_id, @forked_from_turn_id, @codex_thread_id, @status, @created_at, @updated_at)`,
+           (id, agent_group_id, kind, parent_context_id, forked_from_turn_id, codex_thread_id,
+            service_tier, reasoning_effort, status, created_at, updated_at)
+         VALUES (@id, @agent_group_id, @kind, @parent_context_id, @forked_from_turn_id, @codex_thread_id,
+                 @service_tier, @reasoning_effort, @status, @created_at, @updated_at)`,
         node,
       );
       await getDb().run(
@@ -138,10 +144,14 @@ export async function resolveSurfaceContext(input: {
 
   let parentContextId: string | null = null;
   let kind: ContextNodeKind = 'trunk';
+  let serviceTier: string | null = null;
+  let reasoningEffort: string | null = null;
   if (threadKey) {
     const trunk = await resolveSurfaceContext({ ...input, threadId: null, sessionMode: 'shared' });
     parentContextId = trunk.context.id;
     kind = 'branch';
+    serviceTier = trunk.context.service_tier;
+    reasoningEffort = trunk.context.reasoning_effort;
   }
   const context = await createNodeAndBinding({
     agentGroupId: input.agentGroupId,
@@ -149,6 +159,8 @@ export async function resolveSurfaceContext(input: {
     threadKey,
     kind,
     parentContextId,
+    serviceTier,
+    reasoningEffort,
   });
   return { context, created: true };
 }
@@ -162,14 +174,18 @@ export async function createStandaloneContext(agentGroupId: string): Promise<Con
     parent_context_id: null,
     forked_from_turn_id: null,
     codex_thread_id: null,
+    service_tier: null,
+    reasoning_effort: null,
     status: 'active',
     created_at: now,
     updated_at: now,
   };
   await getDb().run(
     `INSERT INTO context_nodes
-       (id, agent_group_id, kind, parent_context_id, forked_from_turn_id, codex_thread_id, status, created_at, updated_at)
-     VALUES (@id, @agent_group_id, @kind, @parent_context_id, @forked_from_turn_id, @codex_thread_id, @status, @created_at, @updated_at)`,
+       (id, agent_group_id, kind, parent_context_id, forked_from_turn_id, codex_thread_id,
+        service_tier, reasoning_effort, status, created_at, updated_at)
+     VALUES (@id, @agent_group_id, @kind, @parent_context_id, @forked_from_turn_id, @codex_thread_id,
+             @service_tier, @reasoning_effort, @status, @created_at, @updated_at)`,
     context,
   );
   return context;
@@ -182,4 +198,23 @@ export async function setContextCodexThreadId(contextId: string, codexThreadId: 
     new Date().toISOString(),
     contextId,
   );
+}
+
+export async function setContextRuntimePreferences(
+  contextId: string,
+  preferences: { serviceTier?: string | null; reasoningEffort?: string | null },
+): Promise<void> {
+  const fields: string[] = [];
+  const values: Record<string, unknown> = { contextId, updatedAt: new Date().toISOString() };
+  if (preferences.serviceTier !== undefined) {
+    fields.push('service_tier = @serviceTier');
+    values.serviceTier = preferences.serviceTier;
+  }
+  if (preferences.reasoningEffort !== undefined) {
+    fields.push('reasoning_effort = @reasoningEffort');
+    values.reasoningEffort = preferences.reasoningEffort;
+  }
+  if (fields.length === 0) return;
+  fields.push('updated_at = @updatedAt');
+  await getDb().run(`UPDATE context_nodes SET ${fields.join(', ')} WHERE id = @contextId`, values);
 }

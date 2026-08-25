@@ -174,6 +174,10 @@ export interface ContextNode {
   parent_context_id: string | null;
   forked_from_turn_id: string | null;
   codex_thread_id: string | null;
+  /** Codex request service tier; NULL inherits normal/default service. */
+  service_tier: string | null;
+  /** Codex reasoning effort; NULL inherits the agent-group setting. */
+  reasoning_effort: string | null;
   status: 'active' | 'archived';
   created_at: string;
   updated_at: string;

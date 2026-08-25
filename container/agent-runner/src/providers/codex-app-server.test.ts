@@ -62,7 +62,7 @@ describe('Codex config TOML', () => {
         },
       },
       MEMORY_SESSION_HOOK,
-      { model: 'gpt-5', effort: 'medium' },
+      { model: 'gpt-5', effort: 'medium', serviceTier: 'fast' },
     );
 
     const content = fs.readFileSync(path.join(tmpHome, '.codex', 'config.toml'), 'utf-8');
@@ -72,6 +72,7 @@ describe('Codex config TOML', () => {
     expect(content).toContain('project_doc_max_bytes = 32768');
     expect(content).toContain('model = "gpt-5"');
     expect(content).toContain('model_reasoning_effort = "medium"');
+    expect(content).toContain('service_tier = "fast"');
     expect(content).toContain('[features]\nmemories = false');
     expect(content).toContain('[memories]\nuse_memories = false\ngenerate_memories = false');
     expect(content).not.toContain('[sandbox_workspace_write]');
@@ -387,8 +388,7 @@ function autoRespondingServer(): {
           const request = JSON.parse(line) as { id: number; method: string; params: Record<string, unknown> };
           requests.push(request);
           const threadId = (request.params.threadId as string | undefined) ?? 'thread-new';
-          const result =
-            request.method === 'turn/start' ? { turn: { id: 'turn-new' } } : { thread: { id: threadId } };
+          const result = request.method === 'turn/start' ? { turn: { id: 'turn-new' } } : { thread: { id: threadId } };
           server.pending.get(request.id)?.resolve({ id: request.id, result });
         },
       },

@@ -55,7 +55,7 @@ There are three durable layers:
 
 The NanoClaw session ID and Codex thread ID should remain separate identifiers. That lets channel sessions be rewired without rewriting model history, and lets future context operations create new thread lineage safely.
 
-Discord exposes bounded, authorized, host-owned context inspection through `/nanocodex where`, `tree`, `lineage`, and `history`. These controls read durable routing and mailbox state directly and do not consume a model turn or alter Codex history.
+Discord exposes bounded, authorized, host-owned context inspection through `/nanocodex where`, `tree`, `lineage`, `status`, and `history`. Owner/admin-only `/nanocodex speed` and `/nanocodex thinking` controls persist service-tier and reasoning-effort preferences on the context node. A new branch snapshots its trunk's explicit preferences and can then diverge independently. Preference changes refresh the replaceable runner after an active turn, while the context-owned Codex thread id and history remain intact. These controls read or update durable host state directly and do not consume a model turn or alter Codex history.
 
 ## Future context operations
 

@@ -72,6 +72,26 @@ describe('Discord slash command parsing', () => {
       ]),
     ).toEqual({ command: '/project issue create', text: '' });
   });
+
+  it('passes string choices through as host-command text', () => {
+    const adapter = createDiscordAdapter({
+      botToken: 'token',
+      publicKey: 'a'.repeat(64),
+      applicationId: 'bot-id',
+    });
+    const { parseSlashCommand } = adapter as unknown as {
+      parseSlashCommand: (
+        name: string,
+        options: Array<{ type: number; name: string; value?: string; options?: unknown[] }>,
+      ) => { command: string; text: string };
+    };
+
+    expect(
+      parseSlashCommand.call(adapter, 'nanocodex', [
+        { type: 1, name: 'speed', options: [{ type: 3, name: 'mode', value: 'fast' }] },
+      ]),
+    ).toEqual({ command: '/nanocodex speed', text: 'fast' });
+  });
 });
 
 describe('Discord DM mention handling', () => {

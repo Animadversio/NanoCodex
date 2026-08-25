@@ -34,6 +34,8 @@ export async function contextRuntimeEnvironment(session: Session): Promise<Recor
   await syncContextCodexThread(session);
   const context = await refreshedContext(session.context_node_id);
   const environment: Record<string, string> = { NANOCLAW_CONTEXT_NODE_ID: context.id };
+  if (context.service_tier) environment.NANOCLAW_CODEX_SERVICE_TIER = context.service_tier;
+  if (context.reasoning_effort) environment.NANOCLAW_CODEX_REASONING_EFFORT = context.reasoning_effort;
   if (context.codex_thread_id) environment.NANOCLAW_CODEX_CONTEXT_THREAD_ID = context.codex_thread_id;
   if (context.kind !== 'branch' || !context.parent_context_id || context.codex_thread_id) return environment;
 

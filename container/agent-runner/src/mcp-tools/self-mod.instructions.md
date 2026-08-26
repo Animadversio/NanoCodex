@@ -5,12 +5,14 @@ To install packages that persist, use the self-modification tools:
 **`install_packages`** — request system (apt) or global npm packages. Requires admin approval.
 
 Example flow:
+
 ```
 install_packages({ apt: ["ffmpeg"], npm: ["@xenova/transformers"], reason: "Audio transcription" })
 # → Admin gets an approval card → approves
 ```
 
 **When to use this vs workspace `pnpm install`:**
+
 - `pnpm install` if you only need it temporarily to do one task. Will not be available in subsequent truns.
 - `install_packages` persists for all future turns. Use especially if the user specifically asks you to add a capability
 
@@ -29,8 +31,13 @@ add_mcp_server({ name: "remote", url: "https://example.com/mcp" })
 ```
 
 Use HTTPS; plain HTTP is allowed only for `localhost` and
-`host.docker.internal` (an MCP server running on the host machine). URLs with
-credentials, fragments, or credential-looking query parameters are rejected;
-authentication belongs in OneCLI.
+local runtime endpoints. URLs with credentials, fragments, or
+credential-looking query parameters are rejected because the URL is persisted
+in configuration and shown for approval.
 
-Do not ask the user to give you credentials or tell them how to create credentials (OAuth, API keys, etc.) — NEVER fabricate credential setup instructions. Credentials are handled by the OneCLI gateway. Use `"onecli-managed"` as the placeholder value for any credential env vars or config fields. After the MCP server is installed and the container restarts, load `/onecli-gateway` for the full credential-handling flow (connect URLs, stubs, error recovery).
+Never ask the user to paste credentials into chat and never fabricate credential
+setup instructions. Follow the active runtime contract: use its configured
+gateway when one exists, or an operator-authorized local secret file through a
+local command. Never put a real secret into MCP config, a URL, an approval
+request, output, or logs. After the MCP server is installed and the session
+runtime restarts, use only credential skills that are actually available.

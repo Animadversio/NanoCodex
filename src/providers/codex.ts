@@ -27,8 +27,9 @@ import path from 'path';
 
 import { DATA_DIR } from '../config.js';
 import { getAgentGroup } from '../db/agent-groups.js';
+import { readEnvFile } from '../env.js';
 import { materializeTemplateSkills } from '../group-skills.js';
-import { composeGroupAgentsMd } from './codex-agents-md.js';
+import { composeGroupAgentsMd, type CodexRuntimeContext } from './codex-agents-md.js';
 import { registerProviderContainerConfig } from './provider-container-registry.js';
 
 registerProviderContainerConfig(
@@ -45,10 +46,13 @@ registerProviderContainerConfig(
     const groupAuth = path.join(codexDir, 'auth.json');
     if (hostAuth && fs.existsSync(hostAuth) && !fs.existsSync(groupAuth)) fs.symlinkSync(hostAuth, groupAuth);
 
-    // Compose this group's AGENTS.md and sync codex-native skill links.
+    // Compose this group's AGENTS.md and sync only skills compatible with the
+    // active runtime/gateway. This prevents native/direct agents from being
+    // taught Docker/OneCLI workflows that do not exist on their host.
+    const runtime = resolveCodexRuntimeContext(ctx.hostEnv);
     const group = await getAgentGroup(ctx.agentGroupId);
-    if (group) await composeGroupAgentsMd(group, ctx.groupDir);
-    syncCodexSkillLinks(ctx.groupDir, ctx.selectedSkills);
+    if (group) await composeGroupAgentsMd(group, ctx.groupDir, runtime);
+    syncCodexSkillLinks(ctx.groupDir, compatibleCodexSkills(ctx.selectedSkills, runtime));
     // Template skills live on the Claude plane (.claude-shared/skills); codex
     // reads .agents/skills (RO-mounted), so mirror them here, host-side, via the
     // shared provider-agnostic helper. Real dirs survive the symlink-only prune
@@ -86,6 +90,30 @@ registerProviderContainerConfig(
  * Sync `.agents/skills/<name>` symlinks to the selected skill set. Targets are
  * host paths in the shared NanoCodex checkout so native Codex can load them.
  */
+function resolveCodexRuntimeContext(hostEnv: NodeJS.ProcessEnv): CodexRuntimeContext {
+  const fileEnv = readEnvFile(['NANOCLAW_RUNTIME_DRIVER', 'NANOCLAW_GATEWAY_PROVIDER']);
+  return {
+    runtimeDriver: (
+      hostEnv.NANOCLAW_RUNTIME_DRIVER?.trim() ||
+      fileEnv.NANOCLAW_RUNTIME_DRIVER?.trim() ||
+      'native'
+    ).toLowerCase(),
+    gatewayProvider: (
+      hostEnv.NANOCLAW_GATEWAY_PROVIDER?.trim() ||
+      fileEnv.NANOCLAW_GATEWAY_PROVIDER?.trim() ||
+      'direct'
+    ).toLowerCase(),
+  };
+}
+
+function compatibleCodexSkills(selectedSkills: string[], runtime: CodexRuntimeContext): string[] {
+  return selectedSkills.filter((skill) => {
+    if (runtime.gatewayProvider === 'direct' && skill === 'onecli-gateway') return false;
+    if (runtime.runtimeDriver === 'native' && skill === 'self-customize') return false;
+    return true;
+  });
+}
+
 function syncCodexSkillLinks(groupDir: string, selectedSkills: string[]): void {
   const skillsDir = path.join(groupDir, '.agents', 'skills');
   fs.mkdirSync(skillsDir, { recursive: true });

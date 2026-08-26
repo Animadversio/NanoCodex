@@ -5,8 +5,8 @@
  * immediately. The host processes the request (including admin approval)
  * and notifies the agent via a chat message when complete. Admin approval
  * is approval to apply the change: `install_packages` auto-rebuilds the
- * per-agent image and restarts the container; `add_mcp_server` just
- * updates `container.json` and restarts (bun runs TS directly — no build
+ * per-agent image and restarts the container when an image-building driver
+ * is active; `add_mcp_server` updates runtime config and restarts (bun runs TS directly — no build
  * step needed for a pure MCP wiring change).
  *
  * Package names are sanitized here at the tool boundary AND re-validated on
@@ -90,8 +90,8 @@ export const installPackages: McpToolDefinition = {
 /**
  * Query keys that name a credential: camelCase-normalized, then matched as
  * whole words between [_.-] separators (`author` never matches `auth`, but
- * `authToken` does) — the URL persists to the container config and renders
- * on the approval card, so secrets must ride via OneCLI.
+ * `authToken` does) — the URL persists to runtime config and renders on the
+ * approval card, so secrets must not be embedded in it.
  */
 const SECRET_QUERY_KEY_RE =
   /(^|[_.-])(o?auth(orization)?|(auth|access|api|session|id)?[_-]?token|secret|passw(or)?d|pwd|api[_-]?key|private[_-]?key|credentials?|bearer|jwt|sig(nature)?)([_.-]|$)/i;
@@ -118,7 +118,7 @@ const ENV_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
  * exposes it (plugin stamping and raw approval payloads are its only
  * carriers), so this copy has none.
  */
-function parseMcpServerInput(args: Record<string, unknown>): { config: ParsedMcpServer } | { error: string } {
+export function parseMcpServerInput(args: Record<string, unknown>): { config: ParsedMcpServer } | { error: string } {
   const command = typeof args.command === 'string' && args.command.trim() ? args.command : undefined;
   const url = typeof args.url === 'string' && args.url.trim() ? args.url.trim() : undefined;
 
@@ -133,14 +133,16 @@ function parseMcpServerInput(args: Record<string, unknown>): { config: ParsedMcp
     }
     const loopback = ['localhost', '127.0.0.1', '[::1]', 'host.docker.internal'].includes(parsed.hostname);
     if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && loopback)) {
-      return { error: 'url must use HTTPS (plain HTTP is allowed only for localhost and host.docker.internal)' };
+      return { error: 'url must use HTTPS (plain HTTP is allowed only for local runtime endpoints)' };
     }
     if (parsed.username || parsed.password || parsed.hash) {
-      return { error: 'url must not contain credentials or fragments; use OneCLI for authentication' };
+      return { error: 'url must not contain credentials or fragments; configure authentication outside the URL' };
     }
     for (const key of parsed.searchParams.keys()) {
       if (SECRET_QUERY_KEY_RE.test(key.replace(CAMEL_SPLIT_RE, '$1_$2'))) {
-        return { error: `url query parameter "${key}" looks like a credential; use OneCLI for authentication` };
+        return {
+          error: `url query parameter "${key}" looks like a credential; configure authentication outside the URL`,
+        };
       }
     }
     return { config: { type: 'http', url } };
@@ -170,7 +172,7 @@ export const addMcpServer: McpToolDefinition = {
   tool: {
     name: 'add_mcp_server',
     description:
-      'Wire an EXISTING third-party MCP server into YOUR per-agent runtime config. Provide either the local `command` + optional `args`/`env`, or its remote Streamable HTTP `url` (HTTPS; plain HTTP only for localhost / host.docker.internal). Requires admin approval; fire-and-forget.',
+      'Wire an EXISTING third-party MCP server into YOUR per-agent runtime config. Provide either the local `command` + optional `args`/`env`, or its remote Streamable HTTP `url` (HTTPS; plain HTTP only for local runtime endpoints). Requires admin approval; fire-and-forget.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -178,7 +180,7 @@ export const addMcpServer: McpToolDefinition = {
         command: { type: 'string', description: 'Command to run the MCP server' },
         url: {
           type: 'string',
-          description: 'Streamable HTTP MCP endpoint (HTTPS; plain HTTP only for localhost / host.docker.internal)',
+          description: 'Streamable HTTP MCP endpoint (HTTPS; plain HTTP only for local runtime endpoints)',
         },
         args: { type: 'array', items: { type: 'string' }, description: 'Command arguments' },
         env: { type: 'object', description: 'Environment variables for the server' },
@@ -211,4 +213,11 @@ export const addMcpServer: McpToolDefinition = {
   },
 };
 
-registerTools([installPackages, addMcpServer]);
+export function selfModToolsForEnvironment(env: NodeJS.ProcessEnv = process.env): McpToolDefinition[] {
+  // Native has no image build surface, so advertising install_packages there
+  // guarantees an approval that the host cannot apply. MCP config remains
+  // valid in both native and image-backed runtimes.
+  return env.NANOCLAW_NATIVE === '1' ? [addMcpServer] : [installPackages, addMcpServer];
+}
+
+registerTools(selfModToolsForEnvironment());

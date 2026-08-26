@@ -7,7 +7,7 @@
  *   - a pointer to the runner-scaffolded memory system (content is supplied by
  *     the provider's native SessionStart hook — nothing is read here)
  *   - a pointer to codex-native skills under `.agents/skills`
- *   - each enabled NanoClaw module's `*.instructions.md` fragment
+ *   - each enabled NanoCodex module's `*.instructions.md` fragment
  *   - MCP server `instructions` from container.json
  *
  * Codex hard-caps project-doc loading (`project_doc_max_bytes`, mirrored in
@@ -29,9 +29,37 @@ export const CODEX_PROJECT_DOC_WARN_BYTES = 28 * 1024;
 const HEADER = '<!-- Composed at spawn. Do not edit. Edit memory/system/definition.md for memory behavior. -->';
 const MCP_TOOLS_HOST_SUBPATH = path.join('container', 'agent-runner', 'src', 'mcp-tools');
 
+export interface CodexRuntimeContext {
+  runtimeDriver: string;
+  gatewayProvider: string;
+}
+
+const DEFAULT_RUNTIME_CONTEXT: CodexRuntimeContext = {
+  runtimeDriver: 'native',
+  gatewayProvider: 'direct',
+};
+
+function runtimeContract(context: CodexRuntimeContext): string {
+  const lines = [
+    'This installation and product are **NanoCodex**.',
+    'Some internal compatibility identifiers still contain `nanoclaw` (for example `ncl`, `mcp__nanoclaw__*`, and `NANOCLAW_*`). Treat those as implementation names, not the product identity.',
+  ];
+  if (context.runtimeDriver === 'native') {
+    lines.push(
+      'This agent runs directly as the host user through the native runtime. Docker and a container image are neither present nor required. Do not claim that work must happen in Docker or request Docker-specific setup.',
+    );
+  }
+  if (context.gatewayProvider === 'direct') {
+    lines.push(
+      'The active credential gateway is direct; OneCLI is not provided. Do not claim credentials must be stored in OneCLI. When the operator authorizes a local secret file, you may read and use it at the request boundary, but never quote, log, archive, or otherwise expose the secret value.',
+    );
+  }
+  return lines.join('\n\n');
+}
+
 function memoryPointer(groupDir: string): string {
   return [
-    'The live memory index and definition are supplied by NanoClaw at session startup, clear, and after compaction.',
+    'The live memory index and definition are supplied by NanoCodex at session startup, clear, and after compaction.',
     `Editable memory-system definition: \`${path.join(groupDir, 'memory', 'system', 'definition.md')}\`.`,
     `Top memory index: \`${path.join(groupDir, 'memory', 'index.md')}\`.`,
     'Read the definition and index, then use linked memory files and conversation archives when relevant.',
@@ -42,7 +70,7 @@ function memoryPointer(groupDir: string): string {
 
 function nativeRuntimeSkillsPointer(groupDir: string): string {
   return [
-    `Selected NanoClaw runtime skills are available as Codex-native skills at \`${path.join(groupDir, '.agents', 'skills')}\`.`,
+    `Selected NanoCodex runtime skills are available as Codex-native skills at \`${path.join(groupDir, '.agents', 'skills')}\`.`,
     `Each skill directory contains a \`SKILL.md\` with its trigger description plus supporting files and points to \`${path.join(process.cwd(), 'container', 'skills')}\`.`,
     'Use skill discovery to load these skills only when their descriptions match the task. Full skill instructions live in the skill directories, not in `AGENTS.md`.',
     `Skills you author or install for this group go in \`${path.join(groupDir, '.agents', 'skills', '<name>', 'SKILL.md')}\`.`,
@@ -54,7 +82,11 @@ interface AgentsMdSection {
   content: string;
 }
 
-export async function composeGroupAgentsMd(group: AgentGroup, groupDir: string): Promise<void> {
+export async function composeGroupAgentsMd(
+  group: AgentGroup,
+  groupDir: string,
+  runtime: CodexRuntimeContext = DEFAULT_RUNTIME_CONTEXT,
+): Promise<void> {
   if (!fs.existsSync(groupDir)) fs.mkdirSync(groupDir, { recursive: true });
 
   const configRow = await getContainerConfig(group.id);
@@ -76,10 +108,12 @@ export async function composeGroupAgentsMd(group: AgentGroup, groupDir: string):
   const persona = readGroupPersona(groupDir);
   if (persona) pushSection('Persona', persona);
 
+  pushSection('NanoCodex Runtime', runtimeContract(runtime));
+
   const sharedBase = path.join(process.cwd(), 'container', 'AGENTS.md');
   if (fs.existsSync(sharedBase)) {
     pushSection(
-      'NanoClaw Runtime Contract',
+      'NanoCodex Runtime Contract',
       fs.readFileSync(sharedBase, 'utf-8').replaceAll('/workspace/agent', groupDir),
     );
   }
@@ -95,7 +129,8 @@ export async function composeGroupAgentsMd(group: AgentGroup, groupDir: string):
       if (!match) continue;
       const moduleName = match[1];
       if (moduleName === 'cli' && cliDisabled) continue;
-      pushSection(`NanoClaw Module: ${moduleName}`, fs.readFileSync(path.join(mcpToolsHostDir, entry), 'utf-8'));
+      if (moduleName === 'self-mod' && runtime.runtimeDriver === 'native') continue;
+      pushSection(`NanoCodex Module: ${moduleName}`, fs.readFileSync(path.join(mcpToolsHostDir, entry), 'utf-8'));
     }
   }
 
@@ -132,7 +167,7 @@ function fitAgentsMdToCap(group: AgentGroup, sections: AgentsMdSection[]): strin
     sections.map((section) => ({ section: section.name, bytes: Buffer.byteLength(section.content, 'utf-8') }));
 
   const isDroppable = (s: AgentsMdSection): boolean =>
-    s.name.startsWith('MCP Server: ') || s.name.startsWith('NanoClaw Module: ');
+    s.name.startsWith('MCP Server: ') || s.name.startsWith('NanoCodex Module: ');
 
   const dropped: string[] = [];
   const render = (): string => {

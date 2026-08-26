@@ -61,6 +61,10 @@ describe('composeGroupAgentsMd cap handling', () => {
       // scanned by codex, so authored skills there never trigger.
       expect(doc).toContain(path.join(groupDir, '.agents', 'skills'));
       expect(doc).toContain('linked memory files');
+      expect(doc).toContain('This installation and product are **NanoCodex**');
+      expect(doc).toContain('Docker and a container image are neither present nor required');
+      expect(doc).toContain('OneCLI is not provided');
+      expect(doc).not.toContain('# NanoCodex Module: self-mod');
       expect(doc).not.toContain('memories, data');
       expect(Buffer.byteLength(doc, 'utf-8')).toBeLessThanOrEqual(CODEX_PROJECT_DOC_MAX_BYTES);
     } finally {
@@ -82,7 +86,7 @@ describe('composeGroupAgentsMd cap handling', () => {
       await composeGroupAgentsMd(g, groupDir);
 
       const doc = fs.readFileSync(path.join(groupDir, 'AGENTS.md'), 'utf-8');
-      expect(doc).toContain('supplied by NanoClaw at session startup');
+      expect(doc).toContain('supplied by NanoCodex at session startup');
       expect(doc).not.toContain('must not enter AGENTS.md');
     } finally {
       fs.rmSync(groupDir, { recursive: true, force: true });

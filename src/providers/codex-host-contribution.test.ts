@@ -74,9 +74,8 @@ describe('codex host contribution against real core', () => {
     // Per-group codex state dir exists and is mounted RW at ~/.codex.
     const codexShared = path.join(DATA_DIR, 'v2-sessions', ag.id, '.codex-shared');
     expect(fs.existsSync(codexShared)).toBe(true);
-    // OneCLI's auth-stub mountpoint is pre-created — on macOS Docker can't
-    // create a missing file mountpoint inside a virtiofs dir mount (exit 125
-    // on first spawn). Red here = the pre-create line was dropped.
+    // Codex auth is linked from the operator's local Codex login rather than
+    // copied into group state. The test environment provides that login.
     expect(fs.existsSync(path.join(codexShared, 'auth.json'))).toBe(true);
     const codexMount = contribution.mounts?.find((m) => m.containerPath === '/home/node/.codex');
     expect(codexMount).toMatchObject({ hostPath: codexShared, readonly: false });
@@ -124,5 +123,31 @@ describe('codex host contribution against real core', () => {
     expect(fs.existsSync(path.join(mirrored, 'SKILL.md'))).toBe(true);
     // A real dir, not a symlink — so it survives syncCodexSkillLinks' symlink-only prune.
     expect(fs.lstatSync(mirrored).isSymbolicLink()).toBe(false);
+  });
+
+  it('filters image/OneCLI-only skills from a native direct Codex runtime', async () => {
+    const ag = group('ag-codex-compatible-skills', 'codex-compatible-skills-group');
+    await createAgentGroup(ag);
+    await ensureContainerConfig(ag.id);
+    const groupDir = path.join(GROUPS_DIR, ag.folder);
+
+    const contributionFn = getProviderContainerConfig('codex');
+    await contributionFn!({
+      sessionDir: path.join(DATA_DIR, 'v2-sessions', ag.id, 'session-1'),
+      agentGroupId: ag.id,
+      groupDir,
+      selectedSkills: ['agent-browser', 'onecli-gateway', 'self-customize', 'welcome'],
+      hostEnv: {
+        ...process.env,
+        NANOCLAW_RUNTIME_DRIVER: 'native',
+        NANOCLAW_GATEWAY_PROVIDER: 'direct',
+      },
+    });
+
+    const skillsDir = path.join(groupDir, '.agents', 'skills');
+    expect(fs.existsSync(path.join(skillsDir, 'agent-browser'))).toBe(true);
+    expect(fs.existsSync(path.join(skillsDir, 'welcome'))).toBe(true);
+    expect(fs.existsSync(path.join(skillsDir, 'onecli-gateway'))).toBe(false);
+    expect(fs.existsSync(path.join(skillsDir, 'self-customize'))).toBe(false);
   });
 });

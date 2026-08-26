@@ -1,6 +1,6 @@
 ## Admin CLI (`ncl`)
 
-The `ncl` command is available at `/usr/local/bin/ncl`. It lets you query and modify NanoClaw's central configuration.
+The `ncl` command is available at `/usr/local/bin/ncl`. It lets you query and modify NanoCodex's central configuration. Its name is retained for compatibility.
 
 ### Usage
 
@@ -18,14 +18,14 @@ Your CLI access may be scoped. Run `ncl help` to see which resources are availab
 
 Run `ncl help` for the full list. Common resources:
 
-| Resource     | Verbs                                                                                                                                     | What it is                                              |
-| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| groups       | list, get, create, update, delete, restart, config get/update, config add-mcp-server/remove-mcp-server, config add-package/remove-package | Agent groups (workspace, personality, container config) |
-| sessions     | list, get                                                                                                                                 | Active sessions (read-only)                             |
-| destinations | list, add, remove                                                                                                                         | Where an agent group can send messages                  |
-| members      | list, add, remove                                                                                                                         | Unprivileged access gate for an agent group             |
-| tasks        | list, get, create, update, cancel, pause, resume, delete, append-log                                                                      | Scheduled tasks for your agent group                    |
-| wirings      | get, update                                                                                                                               | Response policy for the current chat                    |
+| Resource     | Verbs                                                                                                                                     | What it is                                            |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| groups       | list, get, create, update, delete, restart, config get/update, config add-mcp-server/remove-mcp-server, config add-package/remove-package | Agent groups (workspace, personality, runtime config) |
+| sessions     | list, get                                                                                                                                 | Active sessions (read-only)                           |
+| destinations | list, add, remove                                                                                                                         | Where an agent group can send messages                |
+| members      | list, add, remove                                                                                                                         | Unprivileged access gate for an agent group           |
+| tasks        | list, get, create, update, cancel, pause, resume, delete, append-log                                                                      | Scheduled tasks for your agent group                  |
+| wirings      | get, update                                                                                                                               | Response policy for the current chat                  |
 
 Additional resources (available under `global` scope only): messaging-groups, users, roles, user-dms, dropped-messages, approvals.
 
@@ -33,8 +33,8 @@ Under `group` scope, `wirings get/update` always targets the current chat. Updat
 
 ### When to use
 
-- **Looking up your own config** — `ncl groups get` or `ncl groups config get` to see your container config.
-- **Restarting your container** — `ncl groups restart` (with optional `--rebuild` and `--message`).
+- **Looking up your own config** — `ncl groups get` or `ncl groups config get` to see your runtime config.
+- **Restarting your session runtime** — `ncl groups restart` (with optional `--rebuild` only when the active driver supports image builds, and `--message`).
 - **Checking who's in your group** — `ncl members list`.
 - **Seeing your destinations** — `ncl destinations list`.
 - **Scheduling work** — `ncl tasks create`, then `ncl tasks list/get/update/cancel/pause/resume/delete`; `ncl tasks run <id>` fires one extra run now (testing) without changing the schedule. Each task run auto-logs its final text to the run log; `ncl tasks append-log --msg "…"` is for extra mid-run notes (host-timestamped, not a message).

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 
 import { closeSessionDb, initTestSessionDb } from '../mailbox/sqlite/connection.js';
 import { getUndeliveredMessages } from '../db/messages-out.js';
-import { addMcpServer } from './self-mod.js';
+import { addMcpServer, selfModToolsForEnvironment } from './self-mod.js';
 
 beforeEach(() => initTestSessionDb());
 afterEach(() => closeSessionDb());
@@ -69,5 +69,20 @@ describe('add_mcp_server', () => {
       expect(result.isError).toBe(true);
     }
     expect(getUndeliveredMessages()).toHaveLength(0);
+  });
+});
+
+describe('runtime-compatible self-modification tools', () => {
+  it('does not advertise image package installation to the native runtime', () => {
+    expect(selfModToolsForEnvironment({ NANOCLAW_NATIVE: '1' }).map((definition) => definition.tool.name)).toEqual([
+      'add_mcp_server',
+    ]);
+  });
+
+  it('keeps package installation for an image-backed runtime', () => {
+    expect(selfModToolsForEnvironment({}).map((definition) => definition.tool.name)).toEqual([
+      'install_packages',
+      'add_mcp_server',
+    ]);
   });
 });

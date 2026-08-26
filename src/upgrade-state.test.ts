@@ -17,6 +17,7 @@ import {
   isUpgradeCurrent,
   markerPath,
   readUpgradeState,
+  strictUpgradeStateEnabled,
   writeUpgradeState,
 } from './upgrade-state.js';
 
@@ -99,22 +100,27 @@ describe('upgrade-state', () => {
     expect(markerPath()).toBe(path.join(TEST_DIR, 'upgrade-state.json'));
   });
 
-  it('enforceUpgradeTripwire exits when not current and passes when current', () => {
+  it('uses advisory mode by default and strict mode only when explicitly enabled', () => {
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
       throw new Error(`exit:${code}`);
     }) as never);
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    // No marker → trips.
-    expect(() => enforceUpgradeTripwire()).toThrow('exit:1');
+    expect(strictUpgradeStateEnabled({ NANOCODEX_STRICT_UPGRADE_STATE: 'false' })).toBe(false);
+    expect(strictUpgradeStateEnabled({ NANOCODEX_STRICT_UPGRADE_STATE: 'true' })).toBe(true);
 
-    // Stale marker → trips.
+    // No marker is advisory by default, but strict mode trips.
+    expect(() => enforceUpgradeTripwire({ NANOCODEX_STRICT_UPGRADE_STATE: 'false' })).not.toThrow();
+    expect(() => enforceUpgradeTripwire({ NANOCODEX_STRICT_UPGRADE_STATE: 'true' })).toThrow('exit:1');
+
+    // A stale marker behaves the same way.
     writeUpgradeState({ version: '0.0.0-nope', via: 'test' });
-    expect(() => enforceUpgradeTripwire()).toThrow('exit:1');
+    expect(() => enforceUpgradeTripwire({ NANOCODEX_STRICT_UPGRADE_STATE: 'false' })).not.toThrow();
+    expect(() => enforceUpgradeTripwire({ NANOCODEX_STRICT_UPGRADE_STATE: 'true' })).toThrow('exit:1');
 
-    // Matching marker → passes.
+    // A matching marker always passes.
     writeUpgradeState({ version: getCodeVersion(), via: 'test' });
-    expect(() => enforceUpgradeTripwire()).not.toThrow();
+    expect(() => enforceUpgradeTripwire({ NANOCODEX_STRICT_UPGRADE_STATE: 'true' })).not.toThrow();
 
     exitSpy.mockRestore();
     errSpy.mockRestore();

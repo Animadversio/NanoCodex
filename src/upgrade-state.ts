@@ -2,9 +2,9 @@
  * Upgrade marker — the record that an install reached its current version
  * through a sanctioned path (setup / `/update-nanoclaw` / `/migrate-nanoclaw`).
  *
- * The startup tripwire (enforceUpgradeTripwire) refuses to run if the marker
- * is missing or its version doesn't match the running code — i.e. if the
- * install was updated by a raw `git pull` instead of the supported flow.
+ * The startup tripwire (enforceUpgradeTripwire) warns if the marker is missing
+ * or does not match the running code. Production-like installs can opt into a
+ * hard stop with NANOCODEX_STRICT_UPGRADE_STATE=true.
  *
  * The marker lives in `data/` (gitignored), so a `git pull` can't touch it.
  * Only the sanctioned paths call writeUpgradeState(); clearing the tripwire
@@ -15,6 +15,7 @@ import path from 'path';
 import { execFileSync } from 'child_process';
 
 import { DATA_DIR } from './config.js';
+import { readEnvFile } from './env.js';
 import { log } from './log.js';
 
 export interface UpgradeState {
@@ -33,6 +34,12 @@ export interface CodeIdentity {
 
 const MARKER_PATH = path.join(DATA_DIR, 'upgrade-state.json');
 const FIX_COMMAND = 'pnpm exec tsx scripts/upgrade-state.ts set';
+const STRICT_ENV_KEY = 'NANOCODEX_STRICT_UPGRADE_STATE';
+
+export function strictUpgradeStateEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  const configured = env[STRICT_ENV_KEY]?.trim() ?? readEnvFile([STRICT_ENV_KEY])[STRICT_ENV_KEY]?.trim() ?? '';
+  return ['1', 'true', 'yes', 'on'].includes(configured.toLowerCase());
+}
 
 /** Version the running code declares, read from package.json. */
 export function getCodeVersion(projectRoot: string = process.cwd()): string {
@@ -132,15 +139,25 @@ export function markerPath(): string {
 }
 
 /**
- * Startup gate. If the install didn't reach the current version through a
- * sanctioned path, stop with a message written for the coding agent that
- * just ran the upgrade to act on automatically.
+ * Startup check. A mismatched checkout warns and continues by default so a
+ * development install can use normal Git workflows. Strict mode turns the
+ * same mismatch into a stop with recovery guidance.
  */
-export function enforceUpgradeTripwire(): void {
+export function enforceUpgradeTripwire(env: NodeJS.ProcessEnv = process.env): void {
   if (isUpgradeCurrent()) return;
 
   const code = getCodeIdentity();
   const recorded = readUpgradeState();
+  if (!strictUpgradeStateEnabled(env)) {
+    log.warn('Upgrade marker does not match the checkout; continuing in advisory mode', {
+      code,
+      recorded,
+      strictOptIn: `${STRICT_ENV_KEY}=true`,
+      rollback: 'git switch/checkout/revert is allowed; run migrations and tests appropriate to the selected commit',
+    });
+    return;
+  }
+
   const gitUnavailable = code.commit === 'unknown' || code.tree === 'unknown';
   const exactCheckoutChanged =
     recorded !== null &&

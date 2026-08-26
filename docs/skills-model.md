@@ -134,13 +134,20 @@ Migrations are core, not an afterthought. Every breaking change ships with its m
 
 Migrations are **forward-only**. They don't need reverse scripts; the rollback point in front of the upgrade is the undo. If one fails, restore and retry.
 
-A **startup tripwire** keeps installs on the supported path. Every sanctioned
-update path stamps the exact version, Git commit, and tree it reached; at
-startup the host checks that identity against the running checkout. If it is
-missing or differs, including a raw pull between commits that share one package
-version, the host stops with the supported recovery command.
+A **startup tripwire** records whether installs stayed on the supported path.
+Every sanctioned update path stamps the exact version, Git commit, and tree it
+reached; at startup the host checks that identity against the running checkout.
+If it is missing or differs, including a raw pull between commits that share one
+package version, development installs warn and continue. Production-like
+deployments can set `NANOCODEX_STRICT_UPGRADE_STATE=true` to stop instead.
 
-The tripwire doesn't reason about _which_ changes are breaking; it just enforces that the path was used. (DB schema migrations already run automatically at startup, so they aren't its concern; it guards everything else a raw `git pull` leaves undone.) To override, you stamp the marker yourself: an explicit "I know what I'm doing," not a deletion. If you have your **own** upgrade flow (a deploy script, a CI job), make stamping the last step after it succeeds: `pnpm exec tsx scripts/upgrade-state.ts set`. See [upgrade-recovery.md](upgrade-recovery.md).
+The tripwire doesn't reason about _which_ changes are breaking; it only reports
+whether the recorded path was used. DB schema migrations still run
+automatically at startup. In strict mode, override the stop by stamping the
+marker yourself: an explicit "I know what I'm doing," not a deletion. If you
+have your **own** upgrade flow (a deploy script, a CI job), make stamping the
+last step after it succeeds: `pnpm exec tsx scripts/upgrade-state.ts set`. See
+[upgrade-recovery.md](upgrade-recovery.md).
 
 ## The maintainer's side of the deal
 

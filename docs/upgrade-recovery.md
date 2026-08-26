@@ -1,17 +1,23 @@
 # Recovering from the upgrade tripwire
 
-If NanoCodex refuses to start with a message like *"update did not go through the supported path"*, this page explains what happened and how to clear it.
+NanoCodex reports when the checkout does not match its last recorded supported
+upgrade. Development installs continue with a warning so normal Git commits,
+reverts, and rollbacks remain usable. Production-like installs may opt into a
+hard startup stop with `NANOCODEX_STRICT_UPGRADE_STATE=true`; this page explains
+how to clear that stop.
 
 ## What happened
 
 NanoCodex records the exact version, Git commit, and tree it reached through a
 supported path: `/setup`, `/update-nanoclaw`, or `/migrate-nanoclaw`. That
 record lives in `data/upgrade-state.json`. A same-version commit change still
-requires the supported update flow.
+produces a mismatch; development mode warns, while strict mode requires the
+supported update flow or an explicit reviewed override.
 
 At startup the host checks that identity against the running checkout. If it is
-missing or differs, the host stops. This almost always means code changed by a
-raw `git pull`, so migrations, dependency installs, or image work may be missing.
+missing or differs, the host warns. With strict mode enabled it stops instead.
+The mismatch may be an intentional development commit or rollback, but it can
+also mean a raw pull skipped migrations, dependency installs, or image work.
 
 ## If you just ran a supported upgrade
 

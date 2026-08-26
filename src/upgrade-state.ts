@@ -169,7 +169,7 @@ export function enforceUpgradeTripwire(): void {
     [
       '',
       '='.repeat(64),
-      'NanoClaw stopped: update did not go through the supported path',
+      'NanoCodex stopped: update did not go through the supported path',
       '='.repeat(64),
       'This install was updated outside the sanctioned upgrade flow',
       '(no upgrade marker, or its version/commit/tree does not match the code).',
@@ -187,7 +187,7 @@ export function enforceUpgradeTripwire(): void {
       '',
       `  ${FIX_COMMAND}`,
       '',
-      'then restart NanoClaw. If the upgrade did NOT complete, stop and',
+      'then restart NanoCodex. If the upgrade did NOT complete, stop and',
       'investigate instead of clearing.',
       '',
       'Details: docs/upgrade-recovery.md',

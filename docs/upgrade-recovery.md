@@ -1,10 +1,10 @@
 # Recovering from the upgrade tripwire
 
-If NanoClaw refuses to start with a message like *"update did not go through the supported path"*, this page explains what happened and how to clear it.
+If NanoCodex refuses to start with a message like *"update did not go through the supported path"*, this page explains what happened and how to clear it.
 
 ## What happened
 
-NanoClaw records the exact version, Git commit, and tree it reached through a
+NanoCodex records the exact version, Git commit, and tree it reached through a
 supported path: `/setup`, `/update-nanoclaw`, or `/migrate-nanoclaw`. That
 record lives in `data/upgrade-state.json`. A same-version commit change still
 requires the supported update flow.
@@ -21,7 +21,7 @@ If you reached this point by running `/update-nanoclaw`, `/migrate-nanoclaw`, or
 pnpm exec tsx scripts/upgrade-state.ts set
 ```
 
-Then restart NanoClaw. It won't trip again.
+Then restart NanoCodex. It won't trip again.
 
 **Coding agents:** if the upgrade you just ran reported success, run the command above automatically and restart. Only stop to ask a human if the upgrade itself failed or you can't confirm it finished.
 

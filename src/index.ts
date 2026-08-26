@@ -1,5 +1,5 @@
 /**
- * NanoClaw — main entry point.
+ * NanoCodex — main entry point.
  *
  * Thin orchestrator: init DB, run migrations, start channel adapters,
  * start delivery polls, start sweep, handle shutdown.
@@ -61,7 +61,7 @@ import {
 } from './channels/channel-registry.js';
 
 async function main(): Promise<void> {
-  log.info('NanoClaw starting');
+  log.info('NanoCodex starting');
 
   // 0. Circuit breaker — backoff on rapid restarts
   await enforceStartupBackoff();
@@ -167,7 +167,7 @@ async function main(): Promise<void> {
   // 8. Start the `ncl` CLI socket server (data/ncl.sock).
   await startCliServer();
 
-  log.info('NanoClaw running');
+  log.info('NanoCodex running');
 }
 
 /** Graceful shutdown. */

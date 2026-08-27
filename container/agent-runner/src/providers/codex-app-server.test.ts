@@ -44,7 +44,7 @@ describe('Codex config TOML', () => {
     expect(() => tomlBasicString('bad\nvalue')).toThrow(/newline/);
   });
 
-  it('hardcodes workspace-write + Guardian review and writes model, effort, and MCP servers', () => {
+  it('hardcodes workspace-write, Guardian review, live web search, and writes model, effort, and MCP servers', () => {
     tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-home-'));
     process.env.HOME = tmpHome;
 
@@ -69,6 +69,7 @@ describe('Codex config TOML', () => {
     expect(content).toContain('sandbox_mode = "workspace-write"');
     expect(content).toContain('approval_policy = "on-request"');
     expect(content).toContain('approvals_reviewer = "auto_review"');
+    expect(content).toContain('web_search = "live"');
     expect(content).toContain('project_doc_max_bytes = 32768');
     expect(content).toContain('model = "gpt-5"');
     expect(content).toContain('model_reasoning_effort = "medium"');

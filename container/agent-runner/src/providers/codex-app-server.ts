@@ -73,6 +73,7 @@ export type CodexReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high
 const CODEX_SANDBOX_MODE = 'workspace-write';
 const CODEX_APPROVAL_POLICY = 'on-request';
 const CODEX_APPROVALS_REVIEWER = 'auto_review';
+const CODEX_WEB_SEARCH_MODE = 'live';
 
 const CODEX_ENV_ALLOWLIST = new Set([
   'ALL_PROXY',
@@ -511,6 +512,7 @@ export function writeCodexConfigToml(
     `sandbox_mode = ${tomlBasicString(CODEX_SANDBOX_MODE)}`,
     `approval_policy = ${tomlBasicString(CODEX_APPROVAL_POLICY)}`,
     `approvals_reviewer = ${tomlBasicString(CODEX_APPROVALS_REVIEWER)}`,
+    `web_search = ${tomlBasicString(CODEX_WEB_SEARCH_MODE)}`,
     `project_doc_max_bytes = ${CODEX_PROJECT_DOC_MAX_BYTES}`,
   ];
   if (opts.model) lines.push(`model = ${tomlBasicString(opts.model)}`);
